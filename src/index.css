@@ -1,0 +1,363 @@
+:root {
+  --felt: #1a6b3c;
+  --felt-dark: #14522e;
+  --accent: #f5c542;
+  --text: #f2efe8;
+  --card: rgba(255, 255, 255, 0.08);
+  --card-hover: rgba(255, 255, 255, 0.14);
+  --ok: #7fe0a7;
+  --ng: #ff9d9d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family:
+    "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", system-ui,
+    sans-serif;
+  background: radial-gradient(
+      circle at 50% -20%,
+      #238049 0%,
+      var(--felt) 45%,
+      var(--felt-dark) 100%
+    )
+    fixed;
+  color: var(--text);
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+}
+
+h1 {
+  font-size: 1.4rem;
+  margin: 0;
+}
+
+/* ---------- トップページ（ランチャー） ---------- */
+
+.home {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 32px 16px 24px;
+}
+
+.home-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.home-header h1 {
+  font-size: 1.7rem;
+  letter-spacing: 0.06em;
+}
+
+.home-header p {
+  opacity: 0.8;
+  margin: 8px 0 0;
+  font-size: 0.9rem;
+}
+
+.game-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.game-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--card);
+  border-radius: 14px;
+  padding: 16px;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+
+.game-card:hover,
+.game-card:focus-visible {
+  background: var(--card-hover);
+}
+
+.game-card-title {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.game-card-desc {
+  font-size: 0.85rem;
+  opacity: 0.8;
+  line-height: 1.5;
+}
+
+.game-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: 999px;
+  color: #1c2b21;
+}
+
+.badge-入門 {
+  background: #8fdcae;
+}
+
+.badge-初級 {
+  background: #9cc4ef;
+}
+
+.badge-中級 {
+  background: #f2c063;
+}
+
+.badge-上級 {
+  background: #ef9c9c;
+}
+
+.playtime {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+.home-footer {
+  margin-top: 32px;
+  text-align: center;
+  font-size: 0.75rem;
+  opacity: 0.6;
+}
+
+/* ---------- ゲーム共通レイアウト ---------- */
+
+.game-page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 12px 12px 40px;
+}
+
+.game-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.game-header h1 {
+  font-size: 1.1rem;
+}
+
+.back-link {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--card);
+  text-decoration: none;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.back-link:hover {
+  background: var(--card-hover);
+}
+
+.loading {
+  text-align: center;
+  padding: 48px 0;
+  opacity: 0.7;
+}
+
+.scorebar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9rem;
+  opacity: 0.9;
+  margin: 8px 0 12px;
+}
+
+.situation {
+  font-size: 0.9rem;
+  opacity: 0.85;
+  margin: 0 0 10px;
+}
+
+/* ---------- 牌 ---------- */
+
+.tile {
+  aspect-ratio: 3 / 4;
+  padding: 0;
+  border: none;
+  border-radius: 10%;
+  background-color: transparent;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35));
+  display: inline-block;
+}
+
+button.tile {
+  cursor: pointer;
+  transition: transform 0.08s;
+}
+
+button.tile:disabled {
+  cursor: default;
+}
+
+.tile-selected {
+  transform: translateY(-10%);
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* 手牌: 14 枚がスマホ幅に収まるように可変サイズ */
+.hand {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  width: 100%;
+  padding: 6px 0 10px;
+}
+
+.hand .tile {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 46px;
+  height: auto;
+}
+
+.hand-gap {
+  flex: 0 0 10px;
+}
+
+/* 解説内などの小さい牌の並び */
+.tile-row {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px;
+  vertical-align: middle;
+}
+
+.tile-row .tile,
+.tile-small {
+  width: 26px;
+}
+
+/* ---------- ボタン・パネル ---------- */
+
+.btn {
+  background: var(--accent);
+  color: #262008;
+  font-weight: 700;
+  font-size: 1rem;
+  border: none;
+  border-radius: 999px;
+  padding: 12px 28px;
+  cursor: pointer;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn-row {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.choice-btn {
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 12px;
+  padding: 14px 8px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.choice-btn:hover,
+.choice-btn:focus-visible {
+  background: var(--card-hover);
+}
+
+.panel {
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-top: 16px;
+  line-height: 1.7;
+  font-size: 0.92rem;
+}
+
+.panel p {
+  margin: 6px 0;
+}
+
+.result {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0 0 6px;
+}
+
+.result-ok {
+  color: var(--ok);
+}
+
+.result-ng {
+  color: var(--ng);
+}
+
+.ukeire-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ukeire-row:last-child {
+  border-bottom: none;
+}
+
+.ukeire-count {
+  margin-left: auto;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.finished {
+  text-align: center;
+  padding: 24px 0;
+}
+
+.finished .big {
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin: 12px 0;
+}
