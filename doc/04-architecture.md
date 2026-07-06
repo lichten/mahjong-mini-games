@@ -16,8 +16,9 @@ mahjong-mini-games/
 │   │   ├── wall.ts          # 山（洗牌・配牌・ツモ）
 │   │   ├── shanten.ts       # シャンテン数計算（七対子・国士無双含む）
 │   │   ├── agari.ts         # 和了判定・面子分解
-│   │   ├── yaku.ts          # 役判定
-│   │   ├── score.ts         # 符・点数計算
+│   │   ├── yaku.ts          # 役判定（門前手専用。符計算含む）
+│   │   ├── score.ts         # 点数計算（符 × 翻 → 支払い）
+│   │   ├── generate.ts      # クイズ用のランダム手牌生成
 │   │   └── __tests__/       # 上記の Vitest テスト
 │   ├── components/          # 共通 UI コンポーネント
 │   │   ├── Tile.tsx         # 牌 1 枚の表示（→ 03-tile-assets.md）
@@ -30,6 +31,7 @@ mahjong-mini-games/
 │   │   │   ├── index.tsx    # ゲームのルートコンポーネント（default export）
 │   │   │   ├── logic.ts     # ゲーム固有ロジック
 │   │   │   └── problems.ts  # 問題データ
+│   │   ├── shared/          # 複数ゲームで共用する部品（SoloPlay 等）
 │   │   └── .../
 │   ├── gameRegistry.ts      # 全ゲームのメタ情報（タイトル・説明・ルートパス）一覧
 │   ├── App.tsx              # ルーティング定義（ゲームは React.lazy で遅延ロード）

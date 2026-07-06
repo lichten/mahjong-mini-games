@@ -1,5 +1,6 @@
 import {
   countsOf,
+  countsToTiles,
   KIND_COUNT,
   kindToId,
   type Rng,
@@ -8,37 +9,8 @@ import {
   shuffled,
   sortTiles,
   type TileId,
+  tryCompleteHandCounts,
 } from "../../core";
-
-/** 4 面子 1 雀頭の完成形（14 枚）の枚数配列を作る。牌が 4 枚を超えたら失敗 */
-function tryCompleteHandCounts(rng: Rng): number[] | null {
-  const counts = new Array<number>(KIND_COUNT).fill(0);
-  counts[randomInt(KIND_COUNT, rng)] += 2;
-  for (let i = 0; i < 4; i++) {
-    if (rng() < 0.3) {
-      // 刻子
-      const kind = randomInt(KIND_COUNT, rng);
-      counts[kind] += 3;
-      if (counts[kind] > 4) return null;
-    } else {
-      // 順子
-      const base = randomInt(3, rng) * 9 + randomInt(7, rng);
-      for (let d = 0; d < 3; d++) {
-        counts[base + d]++;
-        if (counts[base + d] > 4) return null;
-      }
-    }
-  }
-  return counts;
-}
-
-function countsToTiles(counts: readonly number[]): TileId[] {
-  const tiles: TileId[] = [];
-  for (let kind = 0; kind < KIND_COUNT; kind++) {
-    for (let i = 0; i < counts[kind]; i++) tiles.push(kindToId(kind));
-  }
-  return tiles;
-}
 
 export interface QuizHand {
   tiles: TileId[];

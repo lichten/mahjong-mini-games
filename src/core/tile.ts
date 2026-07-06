@@ -114,6 +114,17 @@ export function countsOf(tiles: readonly TileId[]): number[] {
   return counts;
 }
 
+/** ドラ表示牌からドラの種類インデックスを返す（数牌は次位、北→東、中→白） */
+export function doraKindFromIndicator(indicator: TileId): number {
+  const kind = tileKind(indicator);
+  if (kind < 27) {
+    const base = Math.floor(kind / 9) * 9;
+    return base + ((kind - base + 1) % 9);
+  }
+  if (kind < 31) return 27 + ((kind - 27 + 1) % 4);
+  return 31 + ((kind - 31 + 1) % 3);
+}
+
 const NUMBER_NAMES = ["一", "二", "三", "四", "五", "六", "七", "八", "九"];
 const SUIT_NAMES: Record<NumberSuit, string> = { m: "萬", p: "筒", s: "索" };
 const HONOR_NAMES = ["東", "南", "西", "北", "白", "發", "中"];
