@@ -125,6 +125,25 @@ export function doraKindFromIndicator(indicator: TileId): number {
   return 31 + ((kind - 31 + 1) % 3);
 }
 
+/**
+ * ドラ表示牌の配列に対する tiles 中のドラ枚数を数える。
+ * 赤ドラは含まない（呼び出し側で isRedFive を使って別途数える）。
+ */
+export function countDora(
+  tiles: readonly TileId[],
+  indicators: readonly TileId[],
+): number {
+  const doraKinds = indicators.map(doraKindFromIndicator);
+  let count = 0;
+  for (const tile of tiles) {
+    const kind = tileKind(tile);
+    for (const doraKind of doraKinds) {
+      if (kind === doraKind) count++;
+    }
+  }
+  return count;
+}
+
 const NUMBER_NAMES = ["一", "二", "三", "四", "五", "六", "七", "八", "九"];
 const SUIT_NAMES: Record<NumberSuit, string> = { m: "萬", p: "筒", s: "索" };
 const HONOR_NAMES = ["東", "南", "西", "北", "白", "發", "中"];

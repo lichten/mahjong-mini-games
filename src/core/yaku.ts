@@ -13,6 +13,16 @@ import {
   isKokushiCounts,
 } from "./agari";
 import { countsOf, KIND_COUNT, type TileId, tileKind } from "./tile";
+import {
+  ceil10,
+  DRAGON_KINDS,
+  DRAGON_NAMES,
+  enumerateWaits,
+  GREEN_KINDS,
+  isYaochuuKind,
+  type WaitPlacement,
+  WIND_NAMES,
+} from "./yakuCommon";
 
 export interface WinContext {
   /** 和了牌 */
@@ -46,51 +56,6 @@ export interface HandValue {
   fu: number;
   /** 役満の倍数（0 = 通常手） */
   yakuman: number;
-}
-
-const DRAGON_KINDS = [31, 32, 33]; // 白 發 中
-const DRAGON_NAMES: Record<number, string> = { 31: "白", 32: "發", 33: "中" };
-const WIND_NAMES = ["東", "南", "西", "北"];
-
-function isYaochuuKind(kind: number): boolean {
-  return kind >= 27 || kind % 9 === 0 || kind % 9 === 8;
-}
-
-function ceil10(n: number): number {
-  return Math.ceil(n / 10) * 10;
-}
-
-/** 待ちの取り方 */
-interface WaitPlacement {
-  type: "tanki" | "shanpon" | "kanchan" | "penchan" | "ryanmen";
-  /** 待ちを構成する面子のインデックス（tanki は -1） */
-  meldIndex: number;
-}
-
-function enumerateWaits(d: Decomposition, winKind: number): WaitPlacement[] {
-  const placements: WaitPlacement[] = [];
-  if (d.pair === winKind) placements.push({ type: "tanki", meldIndex: -1 });
-  d.melds.forEach((meld, i) => {
-    if (meld.type === "triplet") {
-      if (meld.kind === winKind)
-        placements.push({ type: "shanpon", meldIndex: i });
-      return;
-    }
-    const r = meld.kind;
-    if (winKind === r + 1) placements.push({ type: "kanchan", meldIndex: i });
-    else if (winKind === r) {
-      placements.push({
-        type: r % 9 === 6 ? "penchan" : "ryanmen",
-        meldIndex: i,
-      });
-    } else if (winKind === r + 2) {
-      placements.push({
-        type: r % 9 === 0 ? "penchan" : "ryanmen",
-        meldIndex: i,
-      });
-    }
-  });
-  return placements;
 }
 
 /** 手牌全体で決まる役（面子分解に依存しないもの）。役満は含まない */
@@ -138,12 +103,11 @@ function wholeHandYakuman(counts: readonly number[]): Yaku[] {
   let allHonor = true;
   let allTerminal = true;
   let allGreen = true;
-  const GREEN = [19, 20, 21, 23, 25, 32]; // s2 s3 s4 s6 s8 發
   for (let k = 0; k < KIND_COUNT; k++) {
     if (counts[k] === 0) continue;
     if (k < 27) allHonor = false;
     if (k >= 27 || (k % 9 !== 0 && k % 9 !== 8)) allTerminal = false;
-    if (!GREEN.includes(k)) allGreen = false;
+    if (!GREEN_KINDS.includes(k)) allGreen = false;
   }
   if (allHonor) result.push({ name: "字一色", han: 0, yakuman: true });
   if (allTerminal) result.push({ name: "清老頭", han: 0, yakuman: true });

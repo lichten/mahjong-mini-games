@@ -71,6 +71,28 @@ export function decompose(counts: readonly number[]): Decomposition[] {
   return results;
 }
 
+/**
+ * 副露 meldCount 組を除いた門前部分の枚数配列を
+ * (4 - meldCount) 面子 + 1 雀頭に分解する全パターンを列挙する。
+ * 枚数は (4 - meldCount) * 3 + 2 枚でなければならない。
+ */
+export function decomposeConcealed(
+  counts: readonly number[],
+  meldCount: number,
+): Decomposition[] {
+  if (!Number.isInteger(meldCount) || meldCount < 0 || meldCount > 4) {
+    throw new Error(`副露数が不正です: ${meldCount}`);
+  }
+  const total = counts.reduce((sum, n) => sum + n, 0);
+  const expected = (4 - meldCount) * 3 + 2;
+  if (total !== expected) {
+    throw new Error(
+      `副露 ${meldCount} 組では門前部分は ${expected} 枚が必要です（${total} 枚）`,
+    );
+  }
+  return decompose(counts);
+}
+
 /** 七対子形か（4 枚使いは不可） */
 export function isChiitoitsuCounts(counts: readonly number[]): boolean {
   let pairs = 0;

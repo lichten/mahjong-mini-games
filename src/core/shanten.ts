@@ -7,15 +7,23 @@
 
 import { countsOf, KIND_COUNT, kindToId, type TileId, tileKind } from "./tile";
 
-/** 標準形（4面子1雀頭）のシャンテン数 */
-export function standardShanten(counts: readonly number[]): number {
+/**
+ * 標準形のシャンテン数（内部実装）。
+ * meldCount は確定済みの副露数で、門前部分の counts に対して
+ * 残り (4 - meldCount) 面子 + 1 雀頭を目指す。
+ */
+function standardShantenWithMeldCount(
+  counts: readonly number[],
+  meldCount: number,
+): number {
   const c = [...counts];
   let best = 8;
 
   const evaluate = (melds: number, partials: number, hasPair: boolean) => {
+    const totalMelds = meldCount + melds;
     // 面子候補は合計 4 ブロックまでしか意味を持たない
-    const usefulPartials = Math.min(partials, 4 - melds);
-    const shanten = 8 - 2 * melds - usefulPartials - (hasPair ? 1 : 0);
+    const usefulPartials = Math.min(partials, Math.max(0, 4 - totalMelds));
+    const shanten = 8 - 2 * totalMelds - usefulPartials - (hasPair ? 1 : 0);
     if (shanten < best) best = shanten;
   };
 
@@ -26,7 +34,7 @@ export function standardShanten(counts: readonly number[]): number {
     partials: number,
     hasPair: boolean,
   ) => {
-    if (melds + partials >= 4 || start >= KIND_COUNT) {
+    if (meldCount + melds + partials >= 4 || start >= KIND_COUNT) {
       evaluate(melds, partials, hasPair);
       return;
     }
@@ -107,6 +115,11 @@ export function standardShanten(counts: readonly number[]): number {
   return best;
 }
 
+/** 標準形（4面子1雀頭）のシャンテン数 */
+export function standardShanten(counts: readonly number[]): number {
+  return standardShantenWithMeldCount(counts, 0);
+}
+
 /** 七対子のシャンテン数 */
 export function chiitoitsuShanten(counts: readonly number[]): number {
   let pairs = 0;
@@ -150,6 +163,58 @@ export function shanten(tiles: readonly TileId[]): number {
     );
   }
   return shantenFromCounts(countsOf(tiles));
+}
+
+/**
+ * 副露 meldCount 組を持つ手の門前部分のシャンテン数。
+ * concealed は 13 - 3 × meldCount 枚（ツモ後は +1 枚）。
+ * 副露がある場合は標準形のみ（七対子・国士は meldCount = 0 のときだけ考慮）。
+ */
+export function shantenWithMelds(
+  concealed: readonly TileId[],
+  meldCount: number,
+): number {
+  if (!Number.isInteger(meldCount) || meldCount < 0 || meldCount > 4) {
+    throw new Error(`副露数が不正です: ${meldCount}`);
+  }
+  const base = 13 - meldCount * 3;
+  if (concealed.length !== base && concealed.length !== base + 1) {
+    throw new Error(
+      `副露 ${meldCount} 組では門前部分は ${base} 枚か ${base + 1} 枚です（${concealed.length} 枚）`,
+    );
+  }
+  const counts = countsOf(concealed);
+  if (meldCount === 0) return shantenFromCounts(counts);
+  return standardShantenWithMeldCount(counts, meldCount);
+}
+
+/**
+ * 副露 meldCount 組を持つ手の待ち牌の種類インデックス。
+ * concealed は 13 - 3 × meldCount 枚。テンパイでなければ空配列。
+ */
+export function waitKindsWithMelds(
+  concealed: readonly TileId[],
+  meldCount: number,
+): number[] {
+  const base = 13 - meldCount * 3;
+  if (concealed.length !== base) {
+    throw new Error(
+      `待ち計算では門前部分は ${base} 枚が必要です（${concealed.length} 枚）`,
+    );
+  }
+  const counts = countsOf(concealed);
+  const waits: number[] = [];
+  for (let kind = 0; kind < KIND_COUNT; kind++) {
+    if (counts[kind] >= 4) continue;
+    counts[kind]++;
+    const won =
+      meldCount === 0
+        ? shantenFromCounts(counts) === -1
+        : standardShantenWithMeldCount(counts, meldCount) === -1;
+    counts[kind]--;
+    if (won) waits.push(kind);
+  }
+  return waits;
 }
 
 export interface EffectiveTile {
