@@ -17,6 +17,8 @@ import {
 
 const SEAT_NAMES = ["自分", "下家", "対面", "上家"];
 const WIND_CHARS = ["東", "南", "西", "北"];
+/** 各家の牌をその家の向きに回す CSS クラス（seat 順） */
+const SEAT_ROT = ["fpm-rot-0", "fpm-rot-270", "fpm-rot-180", "fpm-rot-90"];
 
 const STATS_KEY = "four-player-mahjong:stats";
 const FAST_KEY = "four-player-mahjong:fast";
@@ -62,19 +64,6 @@ function reducer(state: RoundState | null, action: Action): RoundState | null {
     return state;
   }
   return step(state, action, standardAi);
-}
-
-function SeatHead({ state, seat }: { state: RoundState; seat: Seat }) {
-  const p = state.players[seat];
-  return (
-    <div className="fpm-seat-head">
-      <span>
-        {WIND_CHARS[windOf(seat, state.dealer) - 1]} {SEAT_NAMES[seat]}
-        {p.riichi && <span className="fpm-badge-riichi"> リーチ</span>}
-      </span>
-      <span>{p.score}</span>
-    </div>
-  );
 }
 
 function RiverView({ river }: { river: RiverTile[] }) {
@@ -126,33 +115,123 @@ function MeldsView({ melds }: { melds: MeldCall[] }) {
   );
 }
 
-/** 対面: 牌裏の手牌を見せるフル表示 */
-function TopOpponentView({ state, seat }: { state: RoundState; seat: Seat }) {
+/** 卓の辺に沿った手牌（牌裏）と副露の帯。帯ごと席の向きに回転する */
+function EdgeHand({
+  state,
+  seat,
+  zone,
+}: {
+  state: RoundState;
+  seat: Seat;
+  zone: string;
+}) {
   const p = state.players[seat];
   return (
-    <div className="fpm-seat">
-      <SeatHead state={state} seat={seat} />
-      <div className="fpm-hidden">
+    <div className={`fpm-rzone ${zone} ${SEAT_ROT[seat]}`}>
+      <div className="fpm-strip">
         {p.hand.map((_, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: 裏向き表示で並びに意味がない
           <Tile key={i} id="z1" faceDown small />
         ))}
+        <span className="fpm-strip-melds">
+          <MeldsView melds={p.melds} />
+        </span>
       </div>
-      <MeldsView melds={p.melds} />
-      <RiverView river={p.river} />
     </div>
   );
 }
 
-/** 左右の家: 手牌は枚数バッジの簡易表示 */
-function SideOpponentView({ state, seat }: { state: RoundState; seat: Seat }) {
-  const p = state.players[seat];
+/** 席の向きに回転した河ゾーン */
+function SeatRiver({
+  state,
+  seat,
+  zone,
+}: {
+  state: RoundState;
+  seat: Seat;
+  zone: string;
+}) {
+  const self = seat === 0 ? " fpm-self" : "";
   return (
-    <div className="fpm-seat fpm-side">
-      <SeatHead state={state} seat={seat} />
-      <div className="fpm-side-count">手牌 {p.hand.length} 枚</div>
-      <MeldsView melds={p.melds} />
-      <RiverView river={p.river} />
+    <div className={`fpm-rzone ${zone} ${SEAT_ROT[seat]}${self}`}>
+      <RiverView river={state.players[seat].river} />
+    </div>
+  );
+}
+
+/** 中央の点数表示機風パネル */
+function CenterPanel({ state }: { state: RoundState }) {
+  const ph = state.phase;
+  const activeSeat: Seat | null =
+    ph.t === "cpuTurn" ? ph.seat : ph.t === "playerTurn" ? 0 : null;
+  return (
+    <div className="fpm-center">
+      {SEATS.map((seat) => {
+        const p = state.players[seat];
+        return (
+          <div
+            key={seat}
+            className={`fpm-score fpm-score-${seat}${
+              activeSeat === seat ? " fpm-score-active" : ""
+            }`}
+          >
+            <span className="fpm-score-wind">
+              {WIND_CHARS[windOf(seat, state.dealer) - 1]}
+            </span>
+            <span>{p.score}</span>
+            {p.riichi && (
+              <span className="fpm-stick" role="img" aria-label="リーチ棒" />
+            )}
+          </div>
+        );
+      })}
+      <div className="fpm-center-info">
+        <div className="fpm-center-dora">
+          {state.doraIndicators.map((t, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: 槓ドラで同じ表示牌が増え得る
+            <Tile key={`${t}-${i}`} id={t} small />
+          ))}
+        </div>
+        <div className="fpm-center-wall">残り {state.wall.length}</div>
+        {state.kyotaku > 0 && (
+          <div className="fpm-center-kyotaku">供託 {state.kyotaku / 1000}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** 実卓風の卓面（5×5 グリッド） */
+function TableView({
+  state,
+  callout,
+}: {
+  state: RoundState;
+  callout: { seat: Seat; text: string } | null;
+}) {
+  return (
+    <div className="fpm-table">
+      <EdgeHand state={state} seat={2} zone="fpm-edge-top" />
+      <EdgeHand state={state} seat={3} zone="fpm-edge-left" />
+      <EdgeHand state={state} seat={1} zone="fpm-edge-right" />
+      <SeatRiver state={state} seat={2} zone="fpm-zone-top" />
+      <SeatRiver state={state} seat={3} zone="fpm-zone-left" />
+      <SeatRiver state={state} seat={1} zone="fpm-zone-right" />
+      <SeatRiver state={state} seat={0} zone="fpm-zone-bottom" />
+      <CenterPanel state={state} />
+      <div className="fpm-rzone fpm-edge-bottom fpm-rot-0">
+        <div className="fpm-strip fpm-strip-end">
+          <span className="fpm-strip-melds">
+            <MeldsView melds={state.players[0].melds} />
+          </span>
+        </div>
+      </div>
+      {callout && (
+        <div className={`fpm-callout fpm-callout-${callout.seat}`}>
+          {SEAT_NAMES[callout.seat]}
+          <strong>{callout.text}!</strong>
+        </div>
+      )}
     </div>
   );
 }
@@ -423,16 +502,8 @@ export default function FourPlayerMahjong() {
 
   return (
     <main>
-      <div className="scorebar">
-        <span className="tile-row">
-          ドラ表示{" "}
-          {state.doraIndicators.map((t, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: 槓ドラで同じ表示牌が増え得る
-            <Tile key={`${t}-${i}`} id={t} small />
-          ))}
-        </span>
-        <span>残り {state.wall.length} 枚</span>
-        {state.kyotaku > 0 && <span>供託 {state.kyotaku / 1000} 本</span>}
+      <div className="fpm-topbar">
+        <span className="fpm-turnlabel">{turnLabel}</span>
         <button
           type="button"
           className="fpm-speed"
@@ -443,28 +514,7 @@ export default function FourPlayerMahjong() {
         </button>
       </div>
 
-      <TopOpponentView state={state} seat={2} />
-
-      <div className="fpm-middle">
-        <SideOpponentView state={state} seat={3} />
-        <div className="fpm-center">
-          {callout ? (
-            <div className="fpm-callout">
-              {SEAT_NAMES[callout.seat]}
-              <strong>{callout.text}!</strong>
-            </div>
-          ) : (
-            <div className="fpm-turn">{turnLabel}</div>
-          )}
-        </div>
-        <SideOpponentView state={state} seat={1} />
-      </div>
-
-      <div className="fpm-seat fpm-self">
-        <SeatHead state={state} seat={0} />
-        <MeldsView melds={p0.melds} />
-        <RiverView river={p0.river} />
-      </div>
+      <TableView state={state} callout={callout} />
 
       {ph.t === "playerTurn" && (
         <div className="fpm-actions">

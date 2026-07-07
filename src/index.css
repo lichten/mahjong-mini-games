@@ -390,68 +390,14 @@ button.tile:disabled {
 
 /* ---------- 四人打ち麻雀 ---------- */
 
-.fpm-seat {
-  min-width: 0;
-  background: var(--card);
-  border-radius: 10px;
-  padding: 8px;
-  margin-bottom: 8px;
-}
-
-.fpm-middle {
+.fpm-topbar {
   display: flex;
-  gap: 8px;
-  align-items: stretch;
-  margin-bottom: 8px;
-}
-
-.fpm-side {
-  flex: 1;
-  margin-bottom: 0;
-}
-
-.fpm-side-count {
-  font-size: 0.75rem;
-  opacity: 0.75;
-  margin-bottom: 6px;
-}
-
-.fpm-center {
-  flex: 0 0 88px;
-  display: flex;
+  justify-content: space-between;
   align-items: center;
-  justify-content: center;
-  text-align: center;
-  border-radius: 10px;
-  background: rgba(0, 0, 0, 0.18);
-  padding: 8px 4px;
-}
-
-.fpm-turn {
-  font-size: 0.8rem;
-  opacity: 0.8;
-}
-
-.fpm-callout {
-  font-size: 0.9rem;
-  color: var(--accent);
-  animation: fpm-pop 0.18s ease-out;
-}
-
-.fpm-callout strong {
-  display: block;
-  font-size: 1.15rem;
-}
-
-@keyframes fpm-pop {
-  from {
-    transform: scale(0.6);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
+  font-size: 0.85rem;
+  opacity: 0.9;
+  margin: 4px 0 8px;
+  min-height: 26px;
 }
 
 .fpm-speed {
@@ -464,47 +410,330 @@ button.tile:disabled {
   cursor: pointer;
 }
 
-.fpm-seat-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 4px;
-  flex-wrap: wrap;
-  font-size: 0.75rem;
-  opacity: 0.9;
-  margin-bottom: 6px;
-  font-variant-numeric: tabular-nums;
+/* --- 実卓風の卓面（5×5 グリッド） --- */
+
+.fpm-table {
+  /* 河牌の幅。画面幅から逆算し、PC では 26px を上限にする */
+  --t: clamp(15px, calc((100vw - 60px) / 16.1), 26px);
+  --th: calc(var(--t) * 4 / 3); /* 河牌の高さ */
+  --b: calc(var(--t) * 0.78); /* 牌裏・副露・ドラ表示のサイズ */
+  --edge: calc(var(--b) * 4 / 3 + 6px); /* 辺の手牌帯の厚み */
+  --river-w: calc(6 * var(--t) + 10px); /* 河 6 枚 + 立直牌の余白 */
+  --river-h: calc(3 * var(--th) + 4px); /* 河 3 段 */
+  --strip-w: calc(2 * var(--river-h) + var(--river-w)); /* 辺の帯の長さ */
+
+  position: relative;
+  display: grid;
+  grid-template-columns:
+    var(--edge) var(--river-h) var(--river-w) var(--river-h)
+    var(--edge);
+  grid-template-rows:
+    var(--edge) var(--river-h) var(--river-w) var(--river-h)
+    var(--edge);
+  justify-content: center;
+  width: fit-content;
+  margin: 0 auto 10px;
+  padding: 4px;
+  border-radius: 14px;
+  background:
+    radial-gradient(
+      circle at 50% 40%,
+      rgba(255, 255, 255, 0.05),
+      transparent 70%
+    ),
+    var(--felt-dark);
+  box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.25);
 }
 
-.fpm-badge-riichi {
-  color: var(--accent);
-  font-weight: 700;
+/* 卓の中だけ牌を小さくする（Tile コンポーネントは不変） */
+.fpm-table .tile-small {
+  width: var(--t);
 }
 
-.fpm-hidden {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1px;
-  margin-bottom: 6px;
+.fpm-strip .tile-small,
+.fpm-center .tile-small {
+  width: var(--b);
 }
 
+/* グリッドのゾーン割り当て */
+.fpm-edge-top {
+  grid-area: 1 / 2 / 2 / 5;
+}
+
+.fpm-edge-left {
+  grid-area: 2 / 1 / 5 / 2;
+}
+
+.fpm-edge-right {
+  grid-area: 2 / 5 / 5 / 6;
+}
+
+.fpm-edge-bottom {
+  grid-area: 5 / 2 / 6 / 5;
+}
+
+.fpm-zone-top {
+  grid-area: 2 / 3 / 3 / 4;
+}
+
+.fpm-zone-left {
+  grid-area: 2 / 2 / 5 / 3;
+}
+
+.fpm-zone-right {
+  grid-area: 2 / 4 / 5 / 5;
+}
+
+.fpm-zone-bottom {
+  grid-area: 4 / 3 / 5 / 4;
+}
+
+/*
+ * 回転機構: ゾーン（グリッドセル）=固定サイズの外箱、
+ * 内箱（河・帯）は常に回転前サイズで絶対配置し、中央基準で回転する。
+ * 中央基準なので回転後に縦横が入れ替わってもセルに収まる。
+ */
+.fpm-rzone {
+  position: relative;
+}
+
+/* 河: その家から見た向き（左→右・6 枚折り返し）で並べ、コンテナごと回す */
 .fpm-river {
+  width: var(--river-w);
+  height: var(--river-h);
   display: flex;
   flex-wrap: wrap;
-  gap: 2px;
-  min-height: 24px;
+  align-content: flex-start;
+  gap: 2px 1px;
 }
 
-/* 立直宣言牌は横向きに表示する */
+/* 辺の手牌帯（牌裏 + 右端に副露）。帯ごと席の向きに回す */
+.fpm-strip {
+  width: var(--strip-w);
+  height: var(--edge);
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 0 3px;
+}
+
+.fpm-rzone > .fpm-river,
+.fpm-rzone > .fpm-strip {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+}
+
+.fpm-rot-0 > .fpm-river,
+.fpm-rot-0 > .fpm-strip {
+  transform: translate(-50%, -50%);
+}
+
+.fpm-rot-90 > .fpm-river,
+.fpm-rot-90 > .fpm-strip {
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+.fpm-rot-180 > .fpm-river,
+.fpm-rot-180 > .fpm-strip {
+  transform: translate(-50%, -50%) rotate(180deg);
+}
+
+.fpm-rot-270 > .fpm-river,
+.fpm-rot-270 > .fpm-strip {
+  transform: translate(-50%, -50%) rotate(-90deg);
+}
+
+/* 立直宣言牌は横向き */
 .fpm-riichi {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 35px;
+  width: var(--th);
 }
 
 .fpm-riichi .tile {
   transform: rotate(90deg);
 }
+
+.fpm-called {
+  display: inline-flex;
+  opacity: 0.45;
+}
+
+.fpm-strip-melds {
+  margin-left: auto;
+  display: inline-flex;
+}
+
+/* 副露（結果モーダルでも使う） */
+.fpm-melds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.fpm-meld {
+  display: inline-flex;
+  gap: 1px;
+}
+
+.fpm-strip .fpm-melds {
+  margin: 0;
+  gap: 3px;
+  flex-wrap: nowrap;
+}
+
+/* --- 中央の点数表示機 --- */
+
+.fpm-center {
+  grid-area: 3 / 3 / 4 / 4;
+  position: relative;
+  margin: 6px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 0 6px rgba(0, 0, 0, 0.4);
+}
+
+.fpm-score {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+.fpm-score-wind {
+  font-weight: 700;
+}
+
+.fpm-score-active {
+  color: var(--accent);
+  opacity: 1;
+  text-shadow: 0 0 6px rgba(245, 197, 66, 0.8);
+}
+
+.fpm-score-0 {
+  left: 50%;
+  top: calc(100% - 10px);
+  transform: translate(-50%, -50%);
+}
+
+.fpm-score-2 {
+  left: 50%;
+  top: 10px;
+  transform: translate(-50%, -50%) rotate(180deg);
+}
+
+.fpm-score-3 {
+  left: 10px;
+  top: 50%;
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+.fpm-score-1 {
+  left: calc(100% - 10px);
+  top: 50%;
+  transform: translate(-50%, -50%) rotate(-90deg);
+}
+
+/* CSS 製リーチ棒 */
+.fpm-stick {
+  width: 22px;
+  height: 4px;
+  border-radius: 2px;
+  background: #f0ede4;
+  position: relative;
+}
+
+.fpm-stick::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 4px;
+  margin: -2px 0 0 -2px;
+  border-radius: 50%;
+  background: #d0442c;
+}
+
+.fpm-center-info {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-size: 10px;
+  opacity: 0.95;
+}
+
+.fpm-center-dora {
+  display: flex;
+  gap: 1px;
+}
+
+/* --- 発声（卓へのオーバーレイ。テキストは常に正位置） --- */
+
+.fpm-callout {
+  position: absolute;
+  z-index: 5;
+  padding: 4px 10px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.7);
+  color: var(--accent);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  animation: fpm-pop 0.18s ease-out;
+  pointer-events: none;
+}
+
+.fpm-callout strong {
+  margin-left: 4px;
+  font-size: 1.05rem;
+}
+
+.fpm-callout-0 {
+  left: 50%;
+  bottom: 16%;
+  transform: translateX(-50%);
+}
+
+.fpm-callout-2 {
+  left: 50%;
+  top: 16%;
+  transform: translateX(-50%);
+}
+
+.fpm-callout-3 {
+  left: 6%;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.fpm-callout-1 {
+  right: 6%;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+@keyframes fpm-pop {
+  from {
+    transform: scale(0.6) translateX(-50%);
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* --- 卓の下の操作まわり --- */
 
 .fpm-actions {
   display: flex;
@@ -521,24 +750,8 @@ button.tile:disabled {
   font-weight: 700;
 }
 
-.fpm-melds {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 6px;
-}
+/* --- 結果モーダル --- */
 
-.fpm-meld {
-  display: inline-flex;
-  gap: 1px;
-}
-
-.fpm-called {
-  display: inline-flex;
-  opacity: 0.45;
-}
-
-/* 結果モーダル */
 .fpm-overlay {
   position: fixed;
   inset: 0;
