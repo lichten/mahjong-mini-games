@@ -390,22 +390,78 @@ button.tile:disabled {
 
 /* ---------- 四人打ち麻雀 ---------- */
 
-.fpm-opponents {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
 .fpm-seat {
-  flex: 1;
   min-width: 0;
   background: var(--card);
   border-radius: 10px;
   padding: 8px;
+  margin-bottom: 8px;
 }
 
-.fpm-self {
+.fpm-middle {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
   margin-bottom: 8px;
+}
+
+.fpm-side {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.fpm-side-count {
+  font-size: 0.75rem;
+  opacity: 0.75;
+  margin-bottom: 6px;
+}
+
+.fpm-center {
+  flex: 0 0 88px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.18);
+  padding: 8px 4px;
+}
+
+.fpm-turn {
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+.fpm-callout {
+  font-size: 0.9rem;
+  color: var(--accent);
+  animation: fpm-pop 0.18s ease-out;
+}
+
+.fpm-callout strong {
+  display: block;
+  font-size: 1.15rem;
+}
+
+@keyframes fpm-pop {
+  from {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.fpm-speed {
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 0.75rem;
+  padding: 3px 8px;
+  cursor: pointer;
 }
 
 .fpm-seat-head {
@@ -438,10 +494,16 @@ button.tile:disabled {
   min-height: 24px;
 }
 
+/* 立直宣言牌は横向きに表示する */
 .fpm-riichi {
   display: inline-flex;
-  outline: 2px solid var(--accent);
-  border-radius: 4px;
+  align-items: center;
+  justify-content: center;
+  width: 35px;
+}
+
+.fpm-riichi .tile {
+  transform: rotate(90deg);
 }
 
 .fpm-actions {
@@ -474,4 +536,26 @@ button.tile:disabled {
 .fpm-called {
   display: inline-flex;
   opacity: 0.45;
+}
+
+/* 結果モーダル */
+.fpm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.fpm-modal {
+  width: 100%;
+  max-width: 420px;
+  max-height: 88dvh;
+  overflow-y: auto;
+  margin-top: 0;
+  background: var(--felt-dark);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
 }

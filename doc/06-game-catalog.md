@@ -1,6 +1,6 @@
 # 06. ミニゲーム候補カタログ
 
-作成するミニゲームの候補一覧。**第 1〜4 弾の全 11 ゲームが実装済み**（`src/games/` 配下。フォルダ名は各表の「実装」列を参照）。
+作成するミニゲームの候補一覧。**第 1〜5 弾の全 12 ゲームが実装済み**（`src/games/` 配下。フォルダ名は各表の「実装」列を参照）。
 
 凡例 — 必要な core 機能: ①牌基礎 ②シャンテン/有効牌 ③和了判定/待ち ④役/点数（→ [04-architecture.md](04-architecture.md) の実装順と対応）
 
@@ -39,12 +39,12 @@
 
 | ゲーム | 内容 | 1 プレイ時間 | 必要機能 | 実装 |
 |---|---|---|---|---|
-| 四人打ち麻雀（1局勝負） | CPU 3 人と東 1 局のみの単発勝負。鳴き・立直・カンをフル対応（仕様 → [07-four-player-mahjong.md](07-four-player-mahjong.md)） | 3〜7 分 | ①②③④ + 副露拡張 | 未実装（計画中） |
+| 四人打ち麻雀（1局勝負） | CPU 3 人と東 1 局のみの単発勝負。鳴き・立直・カンをフル対応（仕様 → [07-four-player-mahjong.md](07-four-player-mahjong.md)） | 3〜7 分 | ①②③④ + 副露拡張 | `four-player-mahjong` |
 
 ## 実装メモ
 
-- 役判定・点数計算（`src/core/yaku.ts` / `score.ts`）は**門前手専用**（全ゲームが鳴きなしのため）。立直は場況として扱わない
-- 待ち当て系 2 ゲームは `shared/MachiQuizGame.tsx`、ソリティア系 3 ゲームは `shared/SoloPlay.tsx` を共用している
+- 役判定・点数計算はクイズ系が門前手用の `src/core/yaku.ts` / `score.ts` を、四人打ち麻雀が副露対応の `src/core/win.ts` を使う
+- 待ち当て系 2 ゲームは `shared/MachiQuizGame.tsx`、ソリティア系 3 ゲームは `shared/SoloPlay.tsx`、ベタオリ練習と四人打ち麻雀の CPU は `shared/safety.ts` を共用している
 
 ## 共通仕様（全ゲーム）
 

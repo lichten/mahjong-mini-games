@@ -337,7 +337,7 @@ export type ClaimOption =
 
 ## 10. 実装フェーズ分割
 
-各フェーズは単独でテスト green・マージ可能な単位とする。
+各フェーズは単独でテスト green・マージ可能な単位とする。**全フェーズ実装済み（2026-07）**。
 
 | # | 内容 | 完了条件 |
 |---|---|---|
@@ -348,9 +348,9 @@ export type ClaimOption =
 | 5 | **UI 完成**: レイアウト・アクションバー・演出・結果モーダル・registry 登録・localStorage 戦績 | 実機（モバイル幅）で 1 局通しプレイ可能 |
 | 6 | **仕上げ**: エッジケース補強・既存ドキュメント改訂（付録参照） | `npm test` / `npm run lint` / `npm run build` / `npm run smoke` 全通過 |
 
-## 付録: 既存ドキュメント・コードへの影響
+## 付録: 既存ドキュメント・コードへの影響（対応済み）
 
-- [04-architecture.md](04-architecture.md) の「`yaku.ts` # 役判定（門前手専用。符計算含む）」の記述は、フェーズ 1 実装後に「門前は `yaku.ts`、副露対応は `win.ts`」へ改訂する
-- [06-game-catalog.md](06-game-catalog.md) の実装メモ「役判定・点数計算は門前手専用（全ゲームが鳴きなしのため）」も同様に改訂する
-- `src/games/betaori/logic.ts` の `safetyLevel` / `SAFETY_LABELS` は `src/games/shared/safety.ts` へ移動し、betaori は re-import する（フェーズ 4）
+- [04-architecture.md](04-architecture.md) の core 構成に `meld.ts` / `win.ts` を追記し、`yaku.ts` を「門前手用」に改めた
+- [06-game-catalog.md](06-game-catalog.md) の実装メモを「クイズ系は `yaku.ts`、四人打ちは `win.ts`」に改訂した
+- `safetyLevel` / `SAFETY_LABELS` は `src/games/shared/safety.ts` へ昇格し、betaori は re-export で互換維持している
 - doc/README.md のスコープ「一人で完結するゲームのみ」は本ゲーム（CPU 対戦だがオフライン一人プレイ）も該当するため変更不要。「ネット対戦・マッチング機能」は引き続き非スコープ
