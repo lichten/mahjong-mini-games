@@ -91,7 +91,13 @@ await page.screenshot({ path: `${SHOTS}/flow-solo-mahjong.png` });
 // 四人打ち麻雀: 対局開始 → 自分の手番でツモ切り → 河に 1 枚増える
 await page.goto(`${BASE}four-player-mahjong`);
 await page.click('button:has-text("対局開始")');
-// CPU の手番は自動で進む。自分の手番になると手牌がボタンになる
+// CPU の手番は自動で進む。鳴き・ロンの選択肢が出たらスルーして自分の手番を待つ
+for (let i = 0; i < 60; i++) {
+  if (await page.locator(".hand button.tile").first().isVisible().catch(() => false)) break;
+  const pass = page.locator('button:has-text("スルー")');
+  if (await pass.isVisible().catch(() => false)) await pass.click();
+  else await page.waitForTimeout(250);
+}
 await page.waitForSelector(".hand button.tile", { timeout: 15000 });
 const fpmTiles = page.locator(".hand button.tile");
 await fpmTiles.nth((await fpmTiles.count()) - 1).click();

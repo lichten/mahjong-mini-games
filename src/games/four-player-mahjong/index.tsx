@@ -1,7 +1,7 @@
 import { useEffect, useReducer, useState } from "react";
 import { Hand } from "../../components/Hand";
 import { Tile } from "../../components/Tile";
-import type { Seat } from "../../core";
+import { kindToId, type MeldCall, type Seat, tileKind } from "../../core";
 import {
   deal,
   type GameEvent,
@@ -24,7 +24,10 @@ function reducer(state: RoundState | null, action: Action): RoundState | null {
   // タイマー由来の遅延 dispatch が局面とずれていたら無視する
   if (action.type === "CPU_STEP" && state.phase.t !== "cpuTurn") return state;
   if (
-    (action.type === "DISCARD" || action.type === "TSUMO_AGARI") &&
+    (action.type === "DISCARD" ||
+      action.type === "TSUMO_AGARI" ||
+      action.type === "ANKAN" ||
+      action.type === "KAKAN") &&
     state.phase.t !== "playerTurn"
   ) {
     return state;
@@ -54,13 +57,46 @@ function SeatHead({ state, seat }: { state: RoundState; seat: Seat }) {
 function RiverView({ river }: { river: RiverTile[] }) {
   return (
     <div className="fpm-river">
-      {river.map((rt, i) => (
+      {river.map((rt, i) => {
+        const classes = [
+          rt.riichiDeclare ? "fpm-riichi" : "",
+          rt.called ? "fpm-called" : "",
+        ]
+          .filter(Boolean)
+          .join(" ");
+        return (
+          <span
+            // biome-ignore lint/suspicious/noArrayIndexKey: 河は追記のみで並びが変わらない
+            key={`${rt.tile}-${i}`}
+            className={classes || undefined}
+          >
+            <Tile id={rt.tile} small />
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+function MeldsView({ melds }: { melds: MeldCall[] }) {
+  if (melds.length === 0) return null;
+  return (
+    <div className="fpm-melds">
+      {melds.map((m, i) => (
         <span
-          // biome-ignore lint/suspicious/noArrayIndexKey: 河は追記のみで並びが変わらない
-          key={`${rt.tile}-${i}`}
-          className={rt.riichiDeclare ? "fpm-riichi" : undefined}
+          // biome-ignore lint/suspicious/noArrayIndexKey: 副露は追記のみ
+          key={`${m.type}-${i}`}
+          className="fpm-meld"
         >
-          <Tile id={rt.tile} small />
+          {m.tiles.map((t, j) => (
+            <Tile
+              // biome-ignore lint/suspicious/noArrayIndexKey: 副露の並びは固定
+              key={`${t}-${j}`}
+              id={t}
+              small
+              faceDown={m.type === "ankan" && (j === 0 || j === 3)}
+            />
+          ))}
         </span>
       ))}
     </div>
@@ -78,6 +114,7 @@ function OpponentView({ state, seat }: { state: RoundState; seat: Seat }) {
           <Tile key={i} id="z1" faceDown small />
         ))}
       </div>
+      <MeldsView melds={p.melds} />
       <RiverView river={p.river} />
     </div>
   );
@@ -85,9 +122,11 @@ function OpponentView({ state, seat }: { state: RoundState; seat: Seat }) {
 
 function ResultPanel({
   result,
+  winnerMelds,
   onRestart,
 }: {
   result: RoundResult;
+  winnerMelds: MeldCall[];
   onRestart: () => void;
 }) {
   if (result.type === "ryuukyoku") {
@@ -121,6 +160,7 @@ function ResultPanel({
           : `ロン和了（放銃: ${SEAT_NAMES[result.loser ?? 0]}）`}
       </p>
       <Hand tiles={result.hand.slice(0, -1)} drawn={result.winTile} disabled />
+      <MeldsView melds={winnerMelds} />
       {result.uraIndicators.length > 0 && (
         <p className="tile-row">
           裏ドラ表示:{" "}
@@ -187,7 +227,12 @@ export default function FourPlayerMahjong() {
       const id = setTimeout(() => dispatch({ type: "CPU_STEP" }), 450);
       return () => clearTimeout(id);
     }
-    if (ph.t === "playerTurn" && ph.mustTsumogiri && !ph.canTsumo) {
+    if (
+      ph.t === "playerTurn" &&
+      ph.mustTsumogiri &&
+      !ph.canTsumo &&
+      ph.ankanKinds.length === 0
+    ) {
       const id = setTimeout(
         () =>
           dispatch({ type: "DISCARD", index: state.players[0].hand.length }),
@@ -207,8 +252,8 @@ export default function FourPlayerMahjong() {
       <main>
         <div className="panel">
           <p>
-            CPU 3 人との東 1 局一本勝負。立直・ツモ・ロンあり。
-            鳴き（ポン・チー・カン）は今後追加予定です。
+            CPU 3 人との東 1 局一本勝負。立直・鳴き（ポン・チー・カン）に
+            フル対応。CPU の思考ルーチンは開発中（現在はツモ切り）です。
           </p>
           <div className="btn-row">
             <button type="button" className="btn" onClick={newGame}>
@@ -225,8 +270,16 @@ export default function FourPlayerMahjong() {
 
   const discard = (index: number) => {
     if (ph.t !== "playerTurn") return;
-    if (ph.mustTsumogiri && index !== p0.hand.length) return;
+    if (ph.drawn !== null && ph.mustTsumogiri && index !== p0.hand.length)
+      return;
     if (riichiArmed && !ph.riichiOptions.includes(index)) return;
+    if (
+      ph.forbiddenKind !== null &&
+      index < p0.hand.length &&
+      tileKind(p0.hand[index]) === ph.forbiddenKind
+    ) {
+      return; // 現物喰い替え禁止
+    }
     dispatch({ type: "DISCARD", index, riichi: riichiArmed });
     setRiichiArmed(false);
   };
@@ -252,6 +305,7 @@ export default function FourPlayerMahjong() {
 
       <div className="fpm-seat fpm-self">
         <SeatHead state={state} seat={0} />
+        <MeldsView melds={p0.melds} />
         <RiverView river={p0.river} />
       </div>
 
@@ -284,8 +338,33 @@ export default function FourPlayerMahjong() {
               リーチ取消
             </button>
           )}
+          {ph.ankanKinds.map((k) => (
+            <button
+              key={`ankan-${k}`}
+              type="button"
+              className="btn"
+              onClick={() => dispatch({ type: "ANKAN", kind: k })}
+            >
+              カン <Tile id={kindToId(k)} small />
+            </button>
+          ))}
+          {ph.kakanKinds.map((k) => (
+            <button
+              key={`kakan-${k}`}
+              type="button"
+              className="btn"
+              onClick={() => dispatch({ type: "KAKAN", kind: k })}
+            >
+              加カン <Tile id={kindToId(k)} small />
+            </button>
+          ))}
           {riichiArmed && (
             <span className="note">テンパイが崩れない牌だけ切れます</span>
+          )}
+          {ph.drawn === null && (
+            <span className="note">
+              鳴いた牌と同じ牌以外を 1 枚切ってください
+            </span>
           )}
           {ph.mustTsumogiri && !ph.canTsumo && (
             <span className="note">立直中: 自動ツモ切り</span>
@@ -298,13 +377,37 @@ export default function FourPlayerMahjong() {
           <span className="tile-row">
             {SEAT_NAMES[ph.from]} の捨て牌 <Tile id={ph.discarded} small />
           </span>
-          <button
-            type="button"
-            className="btn fpm-win-btn"
-            onClick={() => dispatch({ type: "CLAIM", option: { kind: "ron" } })}
-          >
-            ロン
-          </button>
+          {ph.options.map((opt) =>
+            opt.kind === "ron" ? (
+              <button
+                key="ron"
+                type="button"
+                className="btn fpm-win-btn"
+                onClick={() => dispatch({ type: "CLAIM", option: opt })}
+              >
+                ロン
+              </button>
+            ) : opt.kind === "chi" ? (
+              <button
+                key={`chi-${opt.tiles.join("")}`}
+                type="button"
+                className="btn"
+                onClick={() => dispatch({ type: "CLAIM", option: opt })}
+              >
+                チー <Tile id={opt.tiles[0]} small />
+                <Tile id={opt.tiles[1]} small />
+              </button>
+            ) : (
+              <button
+                key={opt.kind}
+                type="button"
+                className="btn"
+                onClick={() => dispatch({ type: "CLAIM", option: opt })}
+              >
+                {opt.kind === "pon" ? "ポン" : "カン"}
+              </button>
+            ),
+          )}
           <button
             type="button"
             className="btn"
@@ -317,13 +420,23 @@ export default function FourPlayerMahjong() {
 
       <Hand
         tiles={p0.hand}
-        drawn={ph.t === "playerTurn" ? ph.drawn : undefined}
+        drawn={
+          ph.t === "playerTurn" && ph.drawn !== null ? ph.drawn : undefined
+        }
         onTileClick={ph.t === "playerTurn" ? discard : undefined}
         disabled={ph.t !== "playerTurn"}
       />
 
       {ph.t === "finished" && (
-        <ResultPanel result={ph.result} onRestart={newGame} />
+        <ResultPanel
+          result={ph.result}
+          winnerMelds={
+            ph.result.type === "win"
+              ? state.players[ph.result.winner].melds
+              : []
+          }
+          onRestart={newGame}
+        />
       )}
     </main>
   );

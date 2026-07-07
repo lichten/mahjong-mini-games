@@ -115,7 +115,7 @@ export const games: GameMeta[] = [
     path: "four-player-mahjong",
     title: "四人打ち麻雀",
     description:
-      "CPU 3 人との東 1 局一本勝負。立直・ツモ・ロンあり（開発中: 鳴きは今後追加）。",
+      "CPU 3 人との東 1 局一本勝負。立直・鳴きフル対応（開発中: CPU 思考は簡易）。",
     difficulty: "上級",
     playTime: "3〜7 分",
     component: lazy(() => import("./games/four-player-mahjong")),

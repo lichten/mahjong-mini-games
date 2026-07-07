@@ -458,3 +458,20 @@ button.tile:disabled {
   color: #143a24;
   font-weight: 700;
 }
+
+.fpm-melds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.fpm-meld {
+  display: inline-flex;
+  gap: 1px;
+}
+
+.fpm-called {
+  display: inline-flex;
+  opacity: 0.45;
+}
