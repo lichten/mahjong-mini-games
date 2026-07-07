@@ -1,0 +1,2 @@
+# 全テキストファイルを LF に統一する（Biome・CI と一致させる）
+* text=auto eol=lf
