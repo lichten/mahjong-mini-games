@@ -32,3 +32,4 @@
 | [04-architecture.md](04-architecture.md) | リポジトリ構成と共通ロジック層の設計 |
 | [05-deployment.md](05-deployment.md) | GitHub Pages への公開手順 |
 | [06-game-catalog.md](06-game-catalog.md) | 作成するミニゲームの候補カタログ |
+| [07-four-player-mahjong.md](07-four-player-mahjong.md) | 四人打ち麻雀（1局勝負）の仕様書 |
