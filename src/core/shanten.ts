@@ -166,9 +166,20 @@ export function shanten(tiles: readonly TileId[]): number {
 }
 
 /**
+ * 副露 meldCount 組を持つ手の門前部分の枚数配列からシャンテン数を計算する。
+ * 副露がある場合は標準形のみ（七対子・国士は meldCount = 0 のときだけ考慮）。
+ */
+export function shantenFromCountsWithMelds(
+  counts: readonly number[],
+  meldCount: number,
+): number {
+  if (meldCount === 0) return shantenFromCounts(counts);
+  return standardShantenWithMeldCount(counts, meldCount);
+}
+
+/**
  * 副露 meldCount 組を持つ手の門前部分のシャンテン数。
  * concealed は 13 - 3 × meldCount 枚（ツモ後は +1 枚）。
- * 副露がある場合は標準形のみ（七対子・国士は meldCount = 0 のときだけ考慮）。
  */
 export function shantenWithMelds(
   concealed: readonly TileId[],
@@ -183,9 +194,7 @@ export function shantenWithMelds(
       `副露 ${meldCount} 組では門前部分は ${base} 枚か ${base + 1} 枚です（${concealed.length} 枚）`,
     );
   }
-  const counts = countsOf(concealed);
-  if (meldCount === 0) return shantenFromCounts(counts);
-  return standardShantenWithMeldCount(counts, meldCount);
+  return shantenFromCountsWithMelds(countsOf(concealed), meldCount);
 }
 
 /**
@@ -207,10 +216,7 @@ export function waitKindsWithMelds(
   for (let kind = 0; kind < KIND_COUNT; kind++) {
     if (counts[kind] >= 4) continue;
     counts[kind]++;
-    const won =
-      meldCount === 0
-        ? shantenFromCounts(counts) === -1
-        : standardShantenWithMeldCount(counts, meldCount) === -1;
+    const won = shantenFromCountsWithMelds(counts, meldCount) === -1;
     counts[kind]--;
     if (won) waits.push(kind);
   }

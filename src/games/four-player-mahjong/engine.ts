@@ -1,16 +1,18 @@
 /**
  * 四人打ち麻雀（doc/07）の局進行エンジン。React 非依存の純粋関数群。
  *
- * フェーズ3までの範囲: 配牌・ツモ・打牌・ツモ和了・ロン（頭ハネ）・立直
+ * ルール範囲: 配牌・ツモ・打牌・ツモ和了・ロン（頭ハネ）・立直
  * （一発・裏ドラ・W立直）・フリテン 3 種・荒牌流局（ノーテン罰符）・
  * 鳴きフル対応（ポン・チー・明槓/暗槓/加槓、搶槓、嶺上開花、槓ドラ即めくり、
  * 王牌 14 枚維持、現物喰い替え禁止、海底カン禁止、立直後の暗槓制限）。
  *
- * 鳴き・カンを行うのはプレイヤーのみ（CPU の鳴き判断はフェーズ4の AI で追加。
- * 現状の CPU はツモ切りと和了のみ）。
+ * CPU の思考は CpuAi インターフェースで差し替えられる（難易度フック）。
+ * step() の既定はツモ切りの tsumogiriAi。標準 AI は ./ai の standardAi。
+ * CPU が行う鳴きはポン・チー・暗槓のみ（大明槓・加槓は行わない前提。
+ * CPU の加槓を許すとプレイヤーの搶槓待ち受けフェーズが必要になる）。
  *
- * deal(seed) で山を確定した後の進行に乱数はなく、step は完全に決定論的。
- * 同じシードと同じイベント列は常に同じ結果を返す（リプレイ・テスト可能）。
+ * deal(seed) で山を確定した後の進行に乱数はなく、AI も決定論的なので
+ * step は完全に決定論的。同じシードと同じイベント列は常に同じ結果を返す。
  */
 
 import {
@@ -87,7 +89,12 @@ export type Phase =
       forbiddenKind: number | null;
     }
   | { t: "playerClaim"; discarded: TileId; from: Seat; options: ClaimOption[] }
-  | { t: "cpuTurn"; seat: Seat }
+  | {
+      t: "cpuTurn";
+      seat: Seat;
+      /** 鳴いた直後の打牌のみの手番（ツモなし・現物喰い替え禁止） */
+      afterCall?: { forbiddenKind: number | null };
+    }
   | { t: "finished"; result: RoundResult };
 
 export type RoundResult =
@@ -134,6 +141,50 @@ export type GameEvent =
   | { type: "CLAIM"; option: ClaimOption }
   | { type: "PASS" }
   | { type: "CPU_STEP" };
+
+/**
+ * CPU の思考ルーチン。すべて純粋関数で、乱数を使わないこと（決定論の維持）。
+ * 返す選択は必ず渡された候補（options / kinds）の中から選ぶ。
+ */
+export interface CpuAi {
+  /** handPlus（打牌前の手牌。通常は末尾がツモ牌）から切る牌の index を返す */
+  chooseDiscard(
+    state: RoundState,
+    seat: Seat,
+    handPlus: TileId[],
+    forbiddenKind: number | null,
+  ): number;
+  /** 立直宣言するなら options 内の index、しないなら null */
+  chooseRiichi(
+    state: RoundState,
+    seat: Seat,
+    handPlus: TileId[],
+    options: number[],
+  ): number | null;
+  /** 他家の打牌への鳴き（options にロンは含まれない）。鳴かないなら null */
+  chooseClaim(
+    state: RoundState,
+    seat: Seat,
+    tile: TileId,
+    from: Seat,
+    options: ClaimOption[],
+  ): ClaimOption | null;
+  /** 暗槓するなら kinds のいずれか、しないなら null */
+  chooseAnkan(
+    state: RoundState,
+    seat: Seat,
+    handPlus: TileId[],
+    kinds: number[],
+  ): number | null;
+}
+
+/** ツモ切りのみの最小 AI（エンジンテスト・step の既定値） */
+export const tsumogiriAi: CpuAi = {
+  chooseDiscard: (_state, _seat, handPlus) => handPlus.length - 1,
+  chooseRiichi: () => null,
+  chooseClaim: () => null,
+  chooseAnkan: () => null,
+};
 
 function ceil100(n: number): number {
   return Math.ceil(n / 100) * 100;
@@ -337,6 +388,84 @@ function drawRinshan(state: RoundState): { state: RoundState; tile: TileId } {
   };
 }
 
+/** カンできる牌種（海底では不可・嶺上は 4 枚まで・立直後は送り槓禁止） */
+function kanOptions(
+  state: RoundState,
+  seat: Seat,
+  handPlus: TileId[],
+  drawn: TileId,
+): { ankanKinds: number[]; kakanKinds: number[] } {
+  if (state.kanCount >= 4 || state.wall.length < 1) {
+    return { ankanKinds: [], kakanKinds: [] };
+  }
+  const p = state.players[seat];
+  const counts = countsOf(handPlus);
+  if (p.riichi) {
+    // 立直後: ツモった牌自身の暗槓のみ、かつ待ちが変わらない場合
+    const k = tileKind(drawn);
+    if (counts[k] === 4) {
+      const rest = handPlus.filter((t) => tileKind(t) !== k);
+      const newWaits = waitKindsWithMelds(rest, p.melds.length + 1);
+      const same =
+        newWaits.length === p.waits.length &&
+        newWaits.every((w, i) => w === p.waits[i]);
+      if (same) return { ankanKinds: [k], kakanKinds: [] };
+    }
+    return { ankanKinds: [], kakanKinds: [] };
+  }
+  const ankanKinds: number[] = [];
+  for (let k = 0; k < KIND_COUNT; k++) {
+    if (counts[k] === 4) ankanKinds.push(k);
+  }
+  const kakanKinds = p.melds
+    .filter((m) => m.type === "pon")
+    .map(meldKind)
+    .filter((k) => handPlus.some((t) => tileKind(t) === k));
+  return { ankanKinds, kakanKinds };
+}
+
+/** 立直宣言できる打牌 index（門前・1000 点以上・自分のツモが残っている） */
+function riichiIndices(
+  state: RoundState,
+  seat: Seat,
+  handPlus: TileId[],
+): number[] {
+  const p = state.players[seat];
+  if (p.riichi !== null) return [];
+  if (!p.melds.every((m) => m.type === "ankan")) return [];
+  if (p.score < 1000 || state.wall.length < 4) return [];
+  return listTenpaiDiscards(handPlus, p.melds.length);
+}
+
+/** 暗槓を実行する（副露追加・槓ドラ即めくり・嶺上ツモ・一発消滅） */
+function executeAnkan(
+  state: RoundState,
+  seat: Seat,
+  kind: number,
+  handPlus: TileId[],
+): { state: RoundState; rinshanTile: TileId } {
+  const p = state.players[seat];
+  const used = handPlus.filter((t) => tileKind(t) === kind);
+  const hand = handPlus.filter((t) => tileKind(t) !== kind);
+  const meld: MeldCall = {
+    type: "ankan",
+    tiles: used,
+    calledTile: null,
+    from: null,
+  };
+  let s: RoundState = {
+    ...state,
+    anyCalls: true,
+    players: updatePlayer(clearIppatsu(state.players), seat, {
+      hand: sortTiles(hand),
+      melds: [...p.melds, meld],
+    }),
+  };
+  s = revealKanDora(s); // 暗槓も即めくり（doc/07）
+  const { state: s2, tile } = drawRinshan(s);
+  return { state: s2, rinshanTile: tile };
+}
+
 /**
  * プレイヤーの手番フェーズを構築する。
  * drawn = null は鳴き直後（打牌のみ）、rinshan = true は嶺上ツモ。
@@ -369,44 +498,8 @@ function makePlayerTurn(
   const canTsumo =
     winValue(state, 0, handPlus, drawn, true, { rinshan }) !== null;
   const mustTsumogiri = p.riichi !== null;
-
-  // カン（海底では不可・嶺上は 4 枚まで）
-  let ankanKinds: number[] = [];
-  let kakanKinds: number[] = [];
-  if (state.kanCount < 4 && state.wall.length >= 1) {
-    const counts = countsOf(handPlus);
-    if (p.riichi) {
-      // 立直後: ツモった牌自身の暗槓のみ、かつ待ちが変わらない場合（送り槓禁止）
-      const k = tileKind(drawn);
-      if (counts[k] === 4) {
-        const rest = handPlus.filter((t) => tileKind(t) !== k);
-        const newWaits = waitKindsWithMelds(rest, p.melds.length + 1);
-        const same =
-          newWaits.length === p.waits.length &&
-          newWaits.every((w, i) => w === p.waits[i]);
-        if (same) ankanKinds = [k];
-      }
-    } else {
-      for (let k = 0; k < KIND_COUNT; k++) {
-        if (counts[k] === 4) ankanKinds.push(k);
-      }
-      kakanKinds = p.melds
-        .filter((m) => m.type === "pon")
-        .map(meldKind)
-        .filter((k) => handPlus.some((t) => tileKind(t) === k));
-    }
-  }
-
-  // 立直（門前・1000 点以上・自分のツモが残っている）
-  let riichiOptions: number[] = [];
-  if (
-    !mustTsumogiri &&
-    p.melds.every((m) => m.type === "ankan") &&
-    p.score >= 1000 &&
-    state.wall.length >= 4
-  ) {
-    riichiOptions = listTenpaiDiscards(handPlus, p.melds.length);
-  }
+  const { ankanKinds, kakanKinds } = kanOptions(state, 0, handPlus, drawn);
+  const riichiOptions = mustTsumogiri ? [] : riichiIndices(state, 0, handPlus);
 
   return {
     ...state,
@@ -446,6 +539,7 @@ function performDiscard(
   hand: TileId[],
   tile: TileId,
   declareRiichi: boolean,
+  ai: CpuAi,
 ): RoundState {
   const p = state.players[seat];
   const sorted = sortTiles(hand);
@@ -466,18 +560,19 @@ function performDiscard(
       p.riichi && !declareRiichi ? { ...p.riichi, ippatsu: false } : p.riichi,
     furiten: { ...p.furiten, river: riverFuriten },
   });
-  return resolveDiscard({ ...state, players }, seat, tile, false);
+  return resolveDiscard({ ...state, players }, seat, tile, false, ai);
 }
 
-/** プレイヤーが取れる鳴きの選択肢（ロンは含まない） */
-function playerCallOptions(
+/** seat が取れる鳴きの選択肢（ロンは含まない） */
+function callOptionsFor(
   state: RoundState,
+  seat: Seat,
   from: Seat,
   tile: TileId,
 ): ClaimOption[] {
-  const p = state.players[0];
+  const p = state.players[seat];
   // 立直中は鳴けない。河底の打牌も鳴けない
-  if (from === 0 || p.riichi !== null || state.wall.length === 0) return [];
+  if (seat === from || p.riichi !== null || state.wall.length === 0) return [];
   const kind = tileKind(tile);
   const options: ClaimOption[] = [];
   const matching = p.hand.filter((t) => tileKind(t) === kind);
@@ -485,8 +580,8 @@ function playerCallOptions(
   if (matching.length >= 3 && state.kanCount < 4) {
     options.push({ kind: "minkan" });
   }
-  // チーは上家（seat 3）からのみ。数牌のみ
-  if (from === 3 && tileSuit(tile) !== "z") {
+  // チーは上家からのみ。数牌のみ
+  if ((from + 1) % 4 === seat && tileSuit(tile) !== "z") {
     const suit = tileSuit(tile);
     const rank = tileRank(tile);
     const shapes: [number, number][] = [
@@ -533,6 +628,7 @@ function resolveDiscard(
   from: Seat,
   tile: TileId,
   skipPlayer: boolean,
+  ai: CpuAi,
 ): RoundState {
   const kind = tileKind(tile);
 
@@ -549,7 +645,7 @@ function resolveDiscard(
       // プレイヤーにはロンと鳴きをまとめて提示する
       const options: ClaimOption[] = [
         { kind: "ron" },
-        ...playerCallOptions(state, from, tile),
+        ...callOptionsFor(state, 0, from, tile),
       ];
       return {
         ...state,
@@ -559,15 +655,41 @@ function resolveDiscard(
     return settleRon(state, seat, from, hand14, tile, value);
   }
 
-  // --- 鳴き（ロンなしの場合。フェーズ4までは鳴くのはプレイヤーだけ） ---
-  if (!skipPlayer) {
-    const calls = playerCallOptions(state, from, tile);
+  // --- プレイヤーの鳴き（ロンなしの場合） ---
+  if (!skipPlayer && from !== 0) {
+    const calls = callOptionsFor(state, 0, from, tile);
     if (calls.length > 0) {
       return {
         ...state,
         phase: { t: "playerClaim", discarded: tile, from, options: calls },
       };
     }
+  }
+
+  // --- CPU の鳴き（ポン > チー。大明槓は行わない） ---
+  let chiClaim: { seat: Seat; option: ClaimOption } | null = null;
+  for (let i = 1; i <= 3; i++) {
+    const seat = ((from + i) % 4) as Seat;
+    if (seat === 0) continue;
+    const options = callOptionsFor(state, seat, from, tile);
+    if (options.length === 0) continue;
+    const choice = ai.chooseClaim(state, seat, tile, from, options);
+    if (!choice || choice.kind === "ron" || choice.kind === "minkan") continue;
+    const valid = findOption(options, choice);
+    if (!valid) continue;
+    if (valid.kind === "pon") {
+      return executeClaim(state, seat, from, tile, valid);
+    }
+    if (chiClaim === null) chiClaim = { seat, option: valid };
+  }
+  if (chiClaim !== null && chiClaim.option.kind !== "ron") {
+    return executeClaim(
+      state,
+      chiClaim.seat,
+      from,
+      tile,
+      chiClaim.option as Exclude<ClaimOption, { kind: "ron" }>,
+    );
   }
 
   // --- 誰も反応しない → 見逃しフリテン・立直成立・流局判定・次の手番 ---
@@ -581,15 +703,31 @@ function resolveDiscard(
   return beginTurn({ ...s, turn });
 }
 
-/** 鳴き（ポン・チー・明槓）を実行する */
+/** event で指定された応答が options に含まれていればそれを返す */
+function findOption(
+  options: ClaimOption[],
+  choice: ClaimOption,
+): ClaimOption | undefined {
+  return options.find((o) =>
+    o.kind === "chi" && choice.kind === "chi"
+      ? o.tiles[0] === choice.tiles[0] && o.tiles[1] === choice.tiles[1]
+      : o.kind === choice.kind,
+  );
+}
+
+/**
+ * 鳴き（ポン・チー・明槓）を実行する。
+ * 明槓は claimer = 0（プレイヤー）のみ想定（CPU は大明槓をしない）。
+ */
 function executeClaim(
   state: RoundState,
+  claimer: Seat,
   from: Seat,
   tile: TileId,
   option: Exclude<ClaimOption, { kind: "ron" }>,
 ): RoundState {
   const kind = tileKind(tile);
-  const p = state.players[0];
+  const p = state.players[claimer];
   let meld: MeldCall;
   let hand: TileId[];
   if (option.kind === "pon") {
@@ -629,8 +767,8 @@ function executeClaim(
   s = { ...s, players: markMissedWaits(s.players, from, kind) };
   s = {
     ...s,
-    turn: 0,
-    players: updatePlayer(s.players, 0, {
+    turn: claimer,
+    players: updatePlayer(s.players, claimer, {
       hand: sortTiles(hand),
       melds: [...p.melds, meld],
     }),
@@ -641,7 +779,11 @@ function executeClaim(
     return makePlayerTurn(s2, rinshan, true, null);
   }
   // ポン・チーの後は現物喰い替え禁止
-  return makePlayerTurn(s, null, false, kind);
+  if (claimer === 0) return makePlayerTurn(s, null, false, kind);
+  return {
+    ...s,
+    phase: { t: "cpuTurn", seat: claimer, afterCall: { forbiddenKind: kind } },
+  };
 }
 
 function finishWithScores(
@@ -760,24 +902,114 @@ function settleRyuukyoku(state: RoundState): RoundState {
   }));
 }
 
-/** CPU の 1 手番（ツモ → ツモ和了チェック → ツモ切り） */
-function cpuStep(state: RoundState, seat: Seat): RoundState {
-  const drawn = state.wall[0];
-  const wall = state.wall.slice(1);
+/** AI の返した index を検証し、不正なら安全な代替を選ぶ */
+function safeDiscardIndex(
+  index: number,
+  handPlus: TileId[],
+  forbiddenKind: number | null,
+): number {
+  const ok = (i: number) =>
+    Number.isInteger(i) &&
+    i >= 0 &&
+    i < handPlus.length &&
+    (forbiddenKind === null || tileKind(handPlus[i]) !== forbiddenKind);
+  if (ok(index)) return index;
+  for (let i = handPlus.length - 1; i >= 0; i--) {
+    if (ok(i)) return i;
+  }
+  return handPlus.length - 1;
+}
+
+/**
+ * CPU の 1 手番。
+ * 通常: ツモ → ツモ和了 → 暗槓（連続対応）→ 立直判断 → 打牌。
+ * 鳴き直後（afterCall）: 打牌のみ。
+ */
+function cpuStep(
+  state: RoundState,
+  seat: Seat,
+  afterCall: { forbiddenKind: number | null } | undefined,
+  ai: CpuAi,
+): RoundState {
+  const discardFrom = (
+    s: RoundState,
+    handPlus: TileId[],
+    forbiddenKind: number | null,
+  ): RoundState => {
+    const index = safeDiscardIndex(
+      ai.chooseDiscard(s, seat, handPlus, forbiddenKind),
+      handPlus,
+      forbiddenKind,
+    );
+    const tile = handPlus[index];
+    const hand = [...handPlus.slice(0, index), ...handPlus.slice(index + 1)];
+    return performDiscard(s, seat, hand, tile, false, ai);
+  };
+
+  if (afterCall) {
+    // 鳴き直後: ツモなしで打牌のみ（手牌が 1 枚多い状態）
+    return discardFrom(
+      state,
+      state.players[seat].hand,
+      afterCall.forbiddenKind,
+    );
+  }
+
   const p0 = state.players[seat];
-  const players = updatePlayer(state.players, seat, {
-    furiten: { ...p0.furiten, temporary: false },
-  });
-  const s: RoundState = { ...state, wall, players };
+  let s: RoundState = {
+    ...state,
+    wall: state.wall.slice(1),
+    players: updatePlayer(state.players, seat, {
+      furiten: { ...p0.furiten, temporary: false },
+    }),
+  };
+  let drawn = state.wall[0];
+  let rinshan = false;
+
+  // ツモ和了・暗槓のループ（連続カンに対応）
+  for (;;) {
+    const p = s.players[seat];
+    const handPlus = [...p.hand, drawn];
+    const value = winValue(s, seat, handPlus, drawn, true, { rinshan });
+    if (value) return settleTsumo(s, seat, handPlus, drawn, value);
+    // 立直中の CPU はツモ切りのみ（暗槓は行わない）
+    if (p.riichi) return performDiscard(s, seat, p.hand, drawn, false, ai);
+    const { ankanKinds } = kanOptions(s, seat, handPlus, drawn);
+    const kanKind =
+      ankanKinds.length > 0
+        ? ai.chooseAnkan(s, seat, handPlus, ankanKinds)
+        : null;
+    if (kanKind === null || !ankanKinds.includes(kanKind)) break;
+    const done = executeAnkan(s, seat, kanKind, handPlus);
+    s = done.state;
+    drawn = done.rinshanTile;
+    rinshan = true;
+  }
+
   const p = s.players[seat];
-  const hand14 = [...p.hand, drawn];
-  const value = winValue(s, seat, hand14, drawn, true);
-  if (value) return settleTsumo(s, seat, hand14, drawn, value);
-  return performDiscard(s, seat, p.hand, drawn, false);
+  const handPlus = [...p.hand, drawn];
+  // 立直判断
+  const options = riichiIndices(s, seat, handPlus);
+  if (options.length > 0) {
+    const riichiIndex = ai.chooseRiichi(s, seat, handPlus, options);
+    if (riichiIndex !== null && options.includes(riichiIndex)) {
+      const tile = handPlus[riichiIndex];
+      const hand = [
+        ...handPlus.slice(0, riichiIndex),
+        ...handPlus.slice(riichiIndex + 1),
+      ];
+      return performDiscard(s, seat, hand, tile, true, ai);
+    }
+  }
+  return discardFrom(s, handPlus, null);
 }
 
 /** イベントを 1 つ適用して次の状態を返す（不正なイベントはエラー） */
-export function step(state: RoundState, event: GameEvent): RoundState {
+export function step(
+  state: RoundState,
+  event: GameEvent,
+  ai: CpuAi = tsumogiriAi,
+): RoundState {
   const phase = state.phase;
   switch (event.type) {
     case "DISCARD": {
@@ -824,7 +1056,7 @@ export function step(state: RoundState, event: GameEvent): RoundState {
       ) {
         throw new Error("鳴いた牌と同じ牌は切れません（現物喰い替え禁止）");
       }
-      return performDiscard(state, 0, hand, tile, event.riichi === true);
+      return performDiscard(state, 0, hand, tile, event.riichi === true, ai);
     }
     case "TSUMO_AGARI": {
       if (phase.t !== "playerTurn" || !phase.canTsumo || phase.drawn === null) {
@@ -846,27 +1078,14 @@ export function step(state: RoundState, event: GameEvent): RoundState {
       ) {
         throw new Error("暗槓できる局面ではありません");
       }
-      const p = state.players[0];
-      const handPlus = [...p.hand, phase.drawn];
-      const used = handPlus.filter((t) => tileKind(t) === event.kind);
-      const hand = handPlus.filter((t) => tileKind(t) !== event.kind);
-      const meld: MeldCall = {
-        type: "ankan",
-        tiles: used,
-        calledTile: null,
-        from: null,
-      };
-      let s: RoundState = {
-        ...state,
-        anyCalls: true,
-        players: updatePlayer(clearIppatsu(state.players), 0, {
-          hand: sortTiles(hand),
-          melds: [...p.melds, meld],
-        }),
-      };
-      s = revealKanDora(s); // 暗槓も即めくり（doc/07）
-      const { state: s2, tile: rinshan } = drawRinshan(s);
-      return makePlayerTurn(s2, rinshan, true, null);
+      const handPlus = [...state.players[0].hand, phase.drawn];
+      const { state: s, rinshanTile } = executeAnkan(
+        state,
+        0,
+        event.kind,
+        handPlus,
+      );
+      return makePlayerTurn(s, rinshanTile, true, null);
     }
     case "KAKAN": {
       if (
@@ -921,12 +1140,7 @@ export function step(state: RoundState, event: GameEvent): RoundState {
       if (phase.t !== "playerClaim") {
         throw new Error("応答できる局面ではありません");
       }
-      const option = phase.options.find((o) =>
-        o.kind === "chi" && event.option.kind === "chi"
-          ? o.tiles[0] === event.option.tiles[0] &&
-            o.tiles[1] === event.option.tiles[1]
-          : o.kind === event.option.kind,
-      );
+      const option = findOption(phase.options, event.option);
       if (!option) throw new Error("その応答は選べません");
       if (option.kind === "ron") {
         const p = state.players[0];
@@ -935,17 +1149,17 @@ export function step(state: RoundState, event: GameEvent): RoundState {
         if (!value) throw new Error("ロンできません");
         return settleRon(state, 0, phase.from, hand14, phase.discarded, value);
       }
-      return executeClaim(state, phase.from, phase.discarded, option);
+      return executeClaim(state, 0, phase.from, phase.discarded, option);
     }
     case "PASS": {
       if (phase.t !== "playerClaim") {
         throw new Error("応答できる局面ではありません");
       }
-      return resolveDiscard(state, phase.from, phase.discarded, true);
+      return resolveDiscard(state, phase.from, phase.discarded, true, ai);
     }
     case "CPU_STEP": {
       if (phase.t !== "cpuTurn") throw new Error("CPU の手番ではありません");
-      return cpuStep(state, phase.seat);
+      return cpuStep(state, phase.seat, phase.afterCall, ai);
     }
   }
 }

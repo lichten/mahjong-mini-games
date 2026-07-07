@@ -2,6 +2,7 @@ import { useEffect, useReducer, useState } from "react";
 import { Hand } from "../../components/Hand";
 import { Tile } from "../../components/Tile";
 import { kindToId, type MeldCall, type Seat, tileKind } from "../../core";
+import { standardAi } from "./ai";
 import {
   deal,
   type GameEvent,
@@ -38,7 +39,7 @@ function reducer(state: RoundState | null, action: Action): RoundState | null {
   ) {
     return state;
   }
-  return step(state, action);
+  return step(state, action, standardAi);
 }
 
 function SeatHead({ state, seat }: { state: RoundState; seat: Seat }) {
@@ -253,7 +254,7 @@ export default function FourPlayerMahjong() {
         <div className="panel">
           <p>
             CPU 3 人との東 1 局一本勝負。立直・鳴き（ポン・チー・カン）に
-            フル対応。CPU の思考ルーチンは開発中（現在はツモ切り）です。
+            フル対応。CPU は牌効率で手を進め、立直が入ると降りる標準思考です。
           </p>
           <div className="btn-row">
             <button type="button" className="btn" onClick={newGame}>
