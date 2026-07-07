@@ -25,6 +25,7 @@ const GAME_PATHS = [
   "solo-mahjong",
   "kokushi-challenge",
   "chinitsu-solo",
+  "four-player-mahjong",
 ];
 
 const browser = await chromium.launch({ channel: "msedge", headless: true });
@@ -42,6 +43,10 @@ await page.screenshot({ path: `${SHOTS}/home.png` });
 // 2. 全ゲームを開いて牌が描画されることを確認
 for (const path of GAME_PATHS) {
   await page.goto(`${BASE}${path}`);
+  if (path === "four-player-mahjong") {
+    // 開始画面を挟むゲームは対局を開始してから確認する
+    await page.click('button:has-text("対局開始")');
+  }
   await page.waitForSelector(".tile", { timeout: 15000 });
   await page.screenshot({ path: `${SHOTS}/game-${path}.png` });
 }
@@ -82,6 +87,16 @@ const tiles = page.locator(".hand button.tile");
 await tiles.nth((await tiles.count()) - 1).click();
 await page.waitForSelector(".river .tile");
 await page.screenshot({ path: `${SHOTS}/flow-solo-mahjong.png` });
+
+// 四人打ち麻雀: 対局開始 → 自分の手番でツモ切り → 河に 1 枚増える
+await page.goto(`${BASE}four-player-mahjong`);
+await page.click('button:has-text("対局開始")');
+// CPU の手番は自動で進む。自分の手番になると手牌がボタンになる
+await page.waitForSelector(".hand button.tile", { timeout: 15000 });
+const fpmTiles = page.locator(".hand button.tile");
+await fpmTiles.nth((await fpmTiles.count()) - 1).click();
+await page.waitForSelector(".fpm-self .fpm-river .tile", { timeout: 15000 });
+await page.screenshot({ path: `${SHOTS}/flow-four-player-mahjong.png` });
 
 // 4. ゲーム URL 直リロード（SPA フォールバック確認）
 await page.reload();

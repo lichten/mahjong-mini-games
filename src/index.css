@@ -387,3 +387,74 @@ button.tile:disabled {
   color: var(--accent);
   margin: 12px 0;
 }
+
+/* ---------- 四人打ち麻雀 ---------- */
+
+.fpm-opponents {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.fpm-seat {
+  flex: 1;
+  min-width: 0;
+  background: var(--card);
+  border-radius: 10px;
+  padding: 8px;
+}
+
+.fpm-self {
+  margin-bottom: 8px;
+}
+
+.fpm-seat-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  opacity: 0.9;
+  margin-bottom: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fpm-badge-riichi {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.fpm-hidden {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px;
+  margin-bottom: 6px;
+}
+
+.fpm-river {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  min-height: 24px;
+}
+
+.fpm-riichi {
+  display: inline-flex;
+  outline: 2px solid var(--accent);
+  border-radius: 4px;
+}
+
+.fpm-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 10px 0;
+  min-height: 38px;
+}
+
+.fpm-win-btn {
+  background: var(--accent);
+  color: #143a24;
+  font-weight: 700;
+}

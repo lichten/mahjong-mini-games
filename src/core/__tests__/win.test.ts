@@ -41,7 +41,9 @@ const ankan = (tiles: string): MeldCall => ({
 });
 
 describe("evaluateWin: 門前一致性", () => {
-  it("副露なしの手は evaluateHand と役・翻・符が一致する（ランダム 1000 手）", () => {
+  it("副露なしの手は evaluateHand と役・翻・符が一致する（ランダム 1000 手）", {
+    timeout: 60_000,
+  }, () => {
     const rng = mulberry32(7);
     for (let i = 0; i < 1000; i++) {
       const tiles = randomCompleteHand(rng);

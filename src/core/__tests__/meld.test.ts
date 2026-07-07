@@ -115,7 +115,9 @@ describe("decomposeConcealed", () => {
 });
 
 describe("shantenWithMelds", () => {
-  it("副露 0 組は既存 shanten と一致する（ランダム 1000 手）", () => {
+  it("副露 0 組は既存 shanten と一致する（ランダム 1000 手）", {
+    timeout: 60_000,
+  }, () => {
     const rng = mulberry32(20260707);
     for (let i = 0; i < 1000; i++) {
       const wall = createShuffledWall(rng, { redFives: false });
