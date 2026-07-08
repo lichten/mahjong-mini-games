@@ -191,6 +191,14 @@ h1 {
   background: var(--card-hover);
 }
 
+/* ホーム画面から起動したアプリ表示では、ゲーム一覧への導線を控えめにする */
+@media (display-mode: standalone) {
+  .back-link {
+    background: transparent;
+    opacity: 0.55;
+  }
+}
+
 .loading {
   text-align: center;
   padding: 48px 0;

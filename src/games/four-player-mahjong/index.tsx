@@ -1,6 +1,7 @@
 import { useEffect, useReducer, useRef, useState } from "react";
 import { Hand } from "../../components/Hand";
 import { Tile } from "../../components/Tile";
+import { useWakeLock } from "../../components/useWakeLock";
 import { kindToId, type MeldCall, type Seat, tileKind } from "../../core";
 import { standardAi } from "./ai";
 import {
@@ -451,6 +452,9 @@ export default function FourPlayerMahjong() {
   const prevRef = useRef<MatchState | null>(null);
 
   const delay = fast ? 150 : 500;
+
+  // 対局中はスマホの画面が自動消灯しないようにする
+  useWakeLock(state !== null && state.round.phase.t !== "finished");
 
   // 局面の変化から鳴き・立直の発声と戦績更新を導出する
   useEffect(() => {
