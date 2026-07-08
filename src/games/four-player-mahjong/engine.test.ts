@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseHand, type TileId, tileKind } from "../../core";
-import { START_SCORE, step } from "./engine";
+import { deal, START_SCORE, step } from "./engine";
 import {
   autoPlay,
   JUNK_HAND,
@@ -271,6 +271,109 @@ describe("engine: ツモ和了と流局", () => {
     expect(result.tenpai).toEqual([true, false, false, false]);
     expect(result.scoreDeltas).toEqual([3000, -1000, -1000, -1000]);
     expect(s.kyotaku).toBe(0);
+  });
+});
+
+describe("engine: deal のオプションと本場加符", () => {
+  it("deal(seed, opts): 親・持ち点・本場・供託を指定できる", () => {
+    const s = deal(12345, {
+      dealer: 2,
+      scores: [10000, 20000, 30000, 40000],
+      honba: 3,
+      kyotaku: 2000,
+      keepKyotakuOnDraw: true,
+    });
+    expect(s.dealer).toBe(2);
+    expect(s.players.map((p) => p.score)).toEqual([10000, 20000, 30000, 40000]);
+    expect(s.startScores).toEqual([10000, 20000, 30000, 40000]);
+    expect(s.honba).toBe(3);
+    expect(s.kyotaku).toBe(2000);
+    expect(s.keepKyotakuOnDraw).toBe(true);
+  });
+
+  it("親指定でも山は同一（決定性が保たれる）", () => {
+    const a = deal(777);
+    const b = deal(777, { dealer: ((a.dealer + 1) % 4) as 0 | 1 | 2 | 3 });
+    expect(b.wall).toEqual(a.wall);
+    expect(b.deadWall).toEqual(a.deadWall);
+  });
+
+  it("本場加符: 親ツモは各家 +100/本場（2 本場で 900 オール相当）", () => {
+    let s = testState({
+      wall: parseHand("z2z2z2z2z2z2"),
+      honba: 2,
+      players: [
+        testPlayer("m123m456p789s2355", { river: [{ tile: "z6" }] }),
+        testPlayer(JUNK_HAND),
+        testPlayer(JUNK_HAND),
+        testPlayer(JUNK_HAND),
+      ],
+      dealer: 0,
+      turn: 0,
+      phase: playerTurnPhase("s1", { canTsumo: true }),
+    });
+    s = step(s, { type: "TSUMO_AGARI" });
+    if (s.phase.t !== "finished") throw new Error("終局のはず");
+    const result = s.phase.result;
+    if (result.type !== "win") throw new Error("和了のはず");
+    // 700 オール + 2 本場（各 +200）
+    expect(result.honba).toBe(2);
+    expect(result.scoreDeltas).toEqual([2700, -900, -900, -900]);
+  });
+
+  it("本場加符: ロンは放銃者から +300/本場", () => {
+    const play = (honba: number) => {
+      let s = testState({
+        wall: parseHand("z2z2z2z2z2z2"),
+        honba,
+        players: [
+          testPlayer(JUNK_HAND),
+          testPlayer("m234p567z555s23s99"), // 白待ちで s1 ロン
+          testPlayer(JUNK_HAND),
+          testPlayer(JUNK_HAND),
+        ],
+        turn: 0,
+        phase: playerTurnPhase("s1"),
+      });
+      s = step(s, { type: "DISCARD", index: 13 });
+      if (s.phase.t !== "finished" || s.phase.result.type !== "win") {
+        throw new Error("ロン和了のはず");
+      }
+      return s.phase.result;
+    };
+    const r0 = play(0);
+    const r2 = play(2);
+    expect(r2.winner).toBe(1);
+    expect(r2.honba).toBe(2);
+    expect(r2.scoreDeltas[1] - r0.scoreDeltas[1]).toBe(600); // 和了者 +300×2
+    expect(r2.scoreDeltas[0] - r0.scoreDeltas[0]).toBe(-600); // 放銃者
+    expect(r2.scoreDeltas[2]).toBe(0);
+    expect(r2.scoreDeltas[3]).toBe(0);
+  });
+
+  it("流局・供託持ち越し: keepKyotakuOnDraw で棒を卓上に残す", () => {
+    let s = testState({
+      wall: ["z2"],
+      keepKyotakuOnDraw: true,
+      players: [
+        testPlayer("m123m456p789s2355", {
+          riichi: { double: false, ippatsu: false },
+          score: START_SCORE - 1000,
+        }),
+        testPlayer(JUNK_HAND),
+        testPlayer(JUNK_HAND),
+        testPlayer(JUNK_HAND),
+      ],
+      kyotaku: 1000,
+      turn: 3,
+      phase: { t: "cpuTurn", seat: 3 },
+    });
+    s = step(s, { type: "CPU_STEP" });
+    if (s.phase.t !== "finished") throw new Error("終局のはず");
+    // 立直棒は返却されず卓上に残る（次局へ持ち越し）
+    expect(s.kyotaku).toBe(1000);
+    // 宣言者(0)はテンパイなので罰符 +3000 のみ、棒は戻らない
+    expect(s.players[0].score).toBe(START_SCORE - 1000 + 3000);
   });
 });
 

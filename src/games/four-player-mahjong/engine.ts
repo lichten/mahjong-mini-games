@@ -108,6 +108,8 @@ export type RoundResult =
       hand: TileId[];
       value: HandValue;
       score: ScoreResult;
+      /** 本場数（score.payments には含まれないため表示側で加算表示する） */
+      honba: number;
       uraIndicators: TileId[];
       scoreDeltas: number[];
     }
@@ -127,6 +129,12 @@ export interface RoundState {
   turn: Seat;
   phase: Phase;
   kyotaku: number;
+  /** 本場数（連荘の積み棒。加符 = ロン +300/本場・ツモ 各家 +100/本場） */
+  honba: number;
+  /** 配牌時（立直棒供出前）の各家持ち点。scoreDeltas はこれを基準に算出する */
+  startScores: number[];
+  /** 荒牌流局時に供託を卓上へ残す（東風戦=true / 単発=false=宣言者へ返却） */
+  keepKyotakuOnDraw: boolean;
   /** これまでのカン成立数（嶺上牌の消費数） */
   kanCount: number;
   /** 局中に一度でも鳴き（暗槓含む）があったか（天和/地和/W立直の判定用） */
@@ -206,11 +214,28 @@ function updatePlayer(
   return next;
 }
 
+/** deal のオプション。省略時は東 1 局単発（親ランダム・全員 25000）と同じ挙動 */
+export interface DealOptions {
+  /** 親。省略時はシード付き乱数でランダム決定 */
+  dealer?: Seat;
+  /** 配牌時の各家持ち点。省略時は全員 START_SCORE */
+  scores?: number[];
+  /** 本場数。省略時は 0 */
+  honba?: number;
+  /** 供託（持ち越しの立直棒）。省略時は 0 */
+  kyotaku?: number;
+  /** 荒牌流局時に供託を卓上へ残すか。省略時は false（宣言者へ返却） */
+  keepKyotakuOnDraw?: boolean;
+}
+
 /** 配牌して最初の手番を開始する */
-export function deal(seed: number): RoundState {
+export function deal(seed: number, opts: DealOptions = {}): RoundState {
   const rng = mulberry32(seed);
   const allTiles = createShuffledWall(rng);
-  const dealer = randomInt(4, rng) as Seat;
+  // 山生成が先に rng を消費するため、親を指定しても山の決定性は保たれる
+  const rolled = randomInt(4, rng) as Seat;
+  const dealer = opts.dealer ?? rolled;
+  const scores = opts.scores ?? SEATS.map(() => START_SCORE);
   const live = allTiles.slice(0, 122);
   const deadWall = allTiles.slice(122);
 
@@ -224,7 +249,7 @@ export function deal(seed: number): RoundState {
       hand: hands[seat],
       melds: [],
       river: [],
-      score: START_SCORE,
+      score: scores[seat],
       riichi: null,
       furiten: { river: false, temporary: false, riichi: false },
       waits: waitKindsWithMelds(hands[seat], 0),
@@ -239,7 +264,10 @@ export function deal(seed: number): RoundState {
     dealer,
     turn: dealer,
     phase: { t: "cpuTurn", seat: dealer },
-    kyotaku: 0,
+    kyotaku: opts.kyotaku ?? 0,
+    honba: opts.honba ?? 0,
+    startScores: [...scores],
+    keepKyotakuOnDraw: opts.keepKyotakuOnDraw ?? false,
     kanCount: 0,
     anyCalls: false,
   };
@@ -792,7 +820,7 @@ function finishWithScores(
   kyotaku: number,
   build: (deltas: number[]) => RoundResult,
 ): RoundState {
-  const deltas = scores.map((score) => score - START_SCORE);
+  const deltas = scores.map((score, seat) => score - state.startScores[seat]);
   let players = state.players;
   for (const seat of SEATS) {
     players = updatePlayer(players, seat, { score: scores[seat] });
@@ -821,10 +849,12 @@ function settleTsumo(
   const scores = state.players.map((p) => p.score);
   for (const seat of SEATS) {
     if (seat === winner) continue;
-    const pay =
+    const base =
       dealerWin || seat === state.dealer
         ? ceil100(score.base * 2)
         : ceil100(score.base);
+    // 本場加符: ツモは各家 +100/本場（合計 +300/本場が和了者へ）
+    const pay = base + 100 * state.honba;
     scores[seat] -= pay;
     scores[winner] += pay;
   }
@@ -839,6 +869,7 @@ function settleTsumo(
     hand: hand14,
     value,
     score,
+    honba: state.honba,
     uraIndicators: p.riichi
       ? state.deadWall.slice(9, 9 + state.doraIndicators.length)
       : [],
@@ -860,8 +891,10 @@ function settleRon(
     yakuman: value.yakuman,
   });
   const scores = state.players.map((p) => p.score);
-  scores[loser] -= score.total;
-  scores[winner] += score.total + state.kyotaku;
+  // 本場加符: ロンは放銃者から +300/本場
+  const bonus = 300 * state.honba;
+  scores[loser] -= score.total + bonus;
+  scores[winner] += score.total + bonus + state.kyotaku;
   const p = state.players[winner];
   return finishWithScores(state, scores, 0, (scoreDeltas) => ({
     type: "win",
@@ -872,6 +905,7 @@ function settleRon(
     hand: hand14,
     value,
     score,
+    honba: state.honba,
     uraIndicators: p.riichi
       ? state.deadWall.slice(9, 9 + state.doraIndicators.length)
       : [],
@@ -882,9 +916,12 @@ function settleRon(
 function settleRyuukyoku(state: RoundState): RoundState {
   const tenpai = state.players.map((p) => p.waits.length > 0);
   const scores = state.players.map((p) => p.score);
-  // 供託（立直棒）は宣言者に返却する（doc/07: 次局がないため）
-  for (const seat of SEATS) {
-    if (state.players[seat].riichi) scores[seat] += 1000;
+  // 供託（立直棒）: 単発は宣言者へ返却、東風戦は卓上に残し次局へ持ち越す
+  const carryKyotaku = state.keepKyotakuOnDraw ? state.kyotaku : 0;
+  if (!state.keepKyotakuOnDraw) {
+    for (const seat of SEATS) {
+      if (state.players[seat].riichi) scores[seat] += 1000;
+    }
   }
   // ノーテン罰符（場 3000 点）
   const tenpaiCount = tenpai.filter(Boolean).length;
@@ -895,7 +932,7 @@ function settleRyuukyoku(state: RoundState): RoundState {
       scores[seat] += tenpai[seat] ? gain : -loss;
     }
   }
-  return finishWithScores(state, scores, 0, (scoreDeltas) => ({
+  return finishWithScores(state, scores, carryKyotaku, (scoreDeltas) => ({
     type: "ryuukyoku",
     tenpai,
     scoreDeltas,

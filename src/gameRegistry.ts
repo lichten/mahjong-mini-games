@@ -115,9 +115,9 @@ export const games: GameMeta[] = [
     path: "four-player-mahjong",
     title: "四人打ち麻雀",
     description:
-      "CPU 3 人との東 1 局一本勝負。立直・鳴きフル対応。CPU は牌効率と守備を備えた標準思考。",
+      "CPU 3 人との東風戦（東 1〜4 局）または東 1 局勝負。立直・鳴きフル対応。CPU は牌効率と守備を備えた標準思考。",
     difficulty: "上級",
-    playTime: "3〜7 分",
+    playTime: "3〜15 分",
     component: lazy(() => import("./games/four-player-mahjong")),
   },
 ];

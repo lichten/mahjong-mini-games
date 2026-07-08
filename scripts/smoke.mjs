@@ -44,8 +44,8 @@ await page.screenshot({ path: `${SHOTS}/home.png` });
 for (const path of GAME_PATHS) {
   await page.goto(`${BASE}${path}`);
   if (path === "four-player-mahjong") {
-    // 開始画面を挟むゲームは対局を開始してから確認する
-    await page.click('button:has-text("対局開始")');
+    // 開始画面を挟むゲームは対局を開始してから確認する（東風戦モード）
+    await page.click('button:has-text("東風戦")');
   }
   await page.waitForSelector(".tile", { timeout: 15000 });
   await page.screenshot({ path: `${SHOTS}/game-${path}.png` });
@@ -88,9 +88,9 @@ await tiles.nth((await tiles.count()) - 1).click();
 await page.waitForSelector(".river .tile");
 await page.screenshot({ path: `${SHOTS}/flow-solo-mahjong.png` });
 
-// 四人打ち麻雀: 対局開始 → 自分の手番でツモ切り → 河に 1 枚増える
+// 四人打ち麻雀: 東 1 局開始 → 自分の手番でツモ切り → 河に 1 枚増える
 await page.goto(`${BASE}four-player-mahjong`);
-await page.click('button:has-text("対局開始")');
+await page.click('button:has-text("東 1 局")');
 // CPU の手番は自動で進む。鳴き・ロンの選択肢が出たらスルーして自分の手番を待つ。
 // 稀に自分の手番の前に局が終わったら「もう一度」で打ち直す
 for (let i = 0; i < 120; i++) {

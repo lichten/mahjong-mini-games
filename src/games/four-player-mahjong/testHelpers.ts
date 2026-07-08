@@ -21,6 +21,12 @@ import {
   step,
   tsumogiriAi,
 } from "./engine";
+import {
+  advanceMatch,
+  isMatchOver,
+  type MatchState,
+  startMatch,
+} from "./match";
 
 /**
  * 手牌+副露+河+山+王牌+ツモ中の牌の総数（結果表示前まで常に 136）。
@@ -95,6 +101,47 @@ export function autoPlay(
   throw new Error(`seed ${seed}: 400 手で終局しなかった`);
 }
 
+/**
+ * 東風戦を終局まで自動で打つ。全局・全ステップで不変条件
+ * （点数総和 100000・牌総数 136・王牌 14）を検証する。
+ * 各局の seed は baseSeed から決定論的に導出する。
+ */
+export function autoPlayMatch(
+  baseSeed: number,
+  options: { pass?: boolean; ai?: CpuAi; maxRounds?: number } = {},
+): MatchState {
+  const { pass = false, ai = tsumogiriAi, maxRounds = 60 } = options;
+  let match = startMatch("tonpuu", baseSeed);
+  for (let r = 0; r < maxRounds; r++) {
+    let s = match.round;
+    for (let i = 0; i < 400; i++) {
+      if (s.phase.t === "finished") break;
+      if (countTiles(s) !== 136) {
+        throw new Error(`seed ${baseSeed}#${r}: 牌の総数が ${countTiles(s)}`);
+      }
+      if (totalPoints(s) !== 4 * START_SCORE) {
+        throw new Error(`seed ${baseSeed}#${r}: 点数総和 ${totalPoints(s)}`);
+      }
+      if (s.deadWall.length !== 14) {
+        throw new Error(`seed ${baseSeed}#${r}: 王牌 ${s.deadWall.length} 枚`);
+      }
+      s = step(s, autoEvent(s, pass), ai);
+    }
+    if (s.phase.t !== "finished") {
+      throw new Error(`seed ${baseSeed}#${r}: 局が終局しなかった`);
+    }
+    match = { ...match, round: s };
+    // 精算後も点数総和（供託込み）は保存される
+    if (totalPoints(s) !== 4 * START_SCORE) {
+      throw new Error(`seed ${baseSeed}#${r}: 精算後の総和 ${totalPoints(s)}`);
+    }
+    if (isMatchOver(match)) return { ...match, done: true };
+    match = advanceMatch(match, (baseSeed * 100003 + r + 1) >>> 0);
+    if (match.done) return match;
+  }
+  throw new Error(`seed ${baseSeed}: ${maxRounds} 局で終局しなかった`);
+}
+
 export function testPlayer(
   hand: string,
   over: Partial<PlayerState> = {},
@@ -136,6 +183,9 @@ export function testState(over: Partial<RoundState>): RoundState {
     turn: 0,
     phase: { t: "cpuTurn", seat: 0 },
     kyotaku: 0,
+    honba: 0,
+    startScores: [START_SCORE, START_SCORE, START_SCORE, START_SCORE],
+    keepKyotakuOnDraw: false,
     kanCount: 0,
     anyCalls: false,
     ...over,

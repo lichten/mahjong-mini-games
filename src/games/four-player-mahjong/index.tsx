@@ -4,16 +4,21 @@ import { Tile } from "../../components/Tile";
 import { kindToId, type MeldCall, type Seat, tileKind } from "../../core";
 import { standardAi } from "./ai";
 import {
-  deal,
   type GameEvent,
   type RiverTile,
-  type RoundResult,
   type RoundState,
   SEATS,
-  START_SCORE,
   step,
   windOf,
 } from "./engine";
+import {
+  advanceMatch,
+  finalRanking,
+  isMatchOver,
+  type MatchMode,
+  type MatchState,
+  startMatch,
+} from "./match";
 
 const SEAT_NAMES = ["自分", "下家", "対面", "上家"];
 const WIND_CHARS = ["東", "南", "西", "北"];
@@ -41,29 +46,37 @@ function loadStats(): Stats {
   return { games: 0, wins: 0, deals: 0, best: 0 };
 }
 
-type Action = GameEvent | { type: "NEW_GAME"; seed: number };
+type Action =
+  | GameEvent
+  | { type: "NEW_GAME"; mode: MatchMode; seed: number }
+  | { type: "ADVANCE"; seed: number };
 
-function reducer(state: RoundState | null, action: Action): RoundState | null {
-  if (action.type === "NEW_GAME") return deal(action.seed);
-  if (!state || state.phase.t === "finished") return state;
+function reducer(state: MatchState | null, action: Action): MatchState | null {
+  if (action.type === "NEW_GAME") return startMatch(action.mode, action.seed);
+  if (!state) return state;
+  // ADVANCE は局終了（finished）中に来るので finished ガードより前で処理する
+  if (action.type === "ADVANCE") return advanceMatch(state, action.seed);
+
+  const round = state.round;
+  if (round.phase.t === "finished") return state;
   // タイマー由来の遅延 dispatch が局面とずれていたら無視する
-  if (action.type === "CPU_STEP" && state.phase.t !== "cpuTurn") return state;
+  if (action.type === "CPU_STEP" && round.phase.t !== "cpuTurn") return state;
   if (
     (action.type === "DISCARD" ||
       action.type === "TSUMO_AGARI" ||
       action.type === "ANKAN" ||
       action.type === "KAKAN") &&
-    state.phase.t !== "playerTurn"
+    round.phase.t !== "playerTurn"
   ) {
     return state;
   }
   if (
     (action.type === "CLAIM" || action.type === "PASS") &&
-    state.phase.t !== "playerClaim"
+    round.phase.t !== "playerClaim"
   ) {
     return state;
   }
-  return step(state, action, standardAi);
+  return { ...state, round: step(round, action, standardAi) };
 }
 
 function RiverView({ river }: { river: RiverTile[] }) {
@@ -160,7 +173,15 @@ function SeatRiver({
 }
 
 /** 中央の点数表示機風パネル */
-function CenterPanel({ state }: { state: RoundState }) {
+function CenterPanel({
+  state,
+  kyoku,
+  showKyoku,
+}: {
+  state: RoundState;
+  kyoku: number;
+  showKyoku: boolean;
+}) {
   const ph = state.phase;
   const activeSeat: Seat | null =
     ph.t === "cpuTurn" ? ph.seat : ph.t === "playerTurn" ? 0 : null;
@@ -186,6 +207,11 @@ function CenterPanel({ state }: { state: RoundState }) {
         );
       })}
       <div className="fpm-center-info">
+        {showKyoku && (
+          <div className="fpm-center-kyoku">
+            東{kyoku}局{state.honba > 0 ? ` ${state.honba}本場` : ""}
+          </div>
+        )}
         <div className="fpm-center-dora">
           {state.doraIndicators.map((t, i) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: 槓ドラで同じ表示牌が増え得る
@@ -205,9 +231,13 @@ function CenterPanel({ state }: { state: RoundState }) {
 function TableView({
   state,
   callout,
+  kyoku,
+  showKyoku,
 }: {
   state: RoundState;
   callout: { seat: Seat; text: string } | null;
+  kyoku: number;
+  showKyoku: boolean;
 }) {
   return (
     <div className="fpm-table">
@@ -218,7 +248,7 @@ function TableView({
       <SeatRiver state={state} seat={3} zone="fpm-zone-left" />
       <SeatRiver state={state} seat={1} zone="fpm-zone-right" />
       <SeatRiver state={state} seat={0} zone="fpm-zone-bottom" />
-      <CenterPanel state={state} />
+      <CenterPanel state={state} kyoku={kyoku} showKyoku={showKyoku} />
       <div className="fpm-rzone fpm-edge-bottom fpm-rot-0">
         <div className="fpm-strip fpm-strip-end">
           <span className="fpm-strip-melds">
@@ -236,23 +266,85 @@ function TableView({
   );
 }
 
+/** 東風戦の最終順位（1 位 → 4 位） */
+function FinalRanking({
+  round,
+  startDealer,
+}: {
+  round: RoundState;
+  startDealer: Seat;
+}) {
+  const order = finalRanking(round, startDealer);
+  return (
+    <div className="fpm-ranking">
+      {order.map((seat, i) => (
+        <div
+          key={seat}
+          className={`fpm-rank-row${seat === 0 ? " fpm-rank-self" : ""}`}
+        >
+          <span className="fpm-rank-pos">{i + 1}位</span>
+          <span>{SEAT_NAMES[seat]}</span>
+          <span className="ukeire-count">{round.players[seat].score}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ResultPanel({
-  result,
-  winnerMelds,
+  round,
+  mode,
+  matchOver,
+  startDealer,
   stats,
+  onNext,
   onRestart,
 }: {
-  result: RoundResult;
-  winnerMelds: MeldCall[];
+  round: RoundState;
+  mode: MatchMode;
+  matchOver: boolean;
+  startDealer: Seat;
   stats: Stats;
+  onNext: () => void;
   onRestart: () => void;
 }) {
+  if (round.phase.t !== "finished") return null;
+  const result = round.phase.result;
+  const winnerMelds =
+    result.type === "win" ? round.players[result.winner].melds : [];
+  const scores = round.players.map((p) => p.score);
+
   const statsLine = (
     <p className="note">
       通算: {stats.games} 局 / 和了 {stats.wins} / 放銃 {stats.deals}
       {stats.best > 0 && ` / 最高 ${stats.best} 点`}
     </p>
   );
+
+  const showNext = mode === "tonpuu" && !matchOver;
+  const footer = (
+    <>
+      {mode === "tonpuu" && matchOver && (
+        <>
+          <p className="result">最終結果</p>
+          <FinalRanking round={round} startDealer={startDealer} />
+        </>
+      )}
+      {statsLine}
+      <div className="btn-row">
+        {showNext ? (
+          <button type="button" className="btn fpm-win-btn" onClick={onNext}>
+            次局へ
+          </button>
+        ) : (
+          <button type="button" className="btn" onClick={onRestart}>
+            もう一度
+          </button>
+        )}
+      </div>
+    </>
+  );
+
   if (result.type === "ryuukyoku") {
     return (
       <div className="fpm-overlay">
@@ -264,13 +356,8 @@ function ResultPanel({
               <span>{result.tenpai[seat] ? "テンパイ" : "ノーテン"}</span>
             </div>
           ))}
-          <ScoreDeltas deltas={result.scoreDeltas} />
-          {statsLine}
-          <div className="btn-row">
-            <button type="button" className="btn" onClick={onRestart}>
-              もう一度
-            </button>
-          </div>
+          <ScoreDeltas scores={scores} deltas={result.scoreDeltas} />
+          {footer}
         </div>
       </div>
     );
@@ -319,27 +406,29 @@ function ResultPanel({
               : `${value.fu} 符 ${value.han} 翻 ${score.payments} 点`}
           </strong>
           {value.yakuman === 0 && score.rank && `（${score.rank}）`}
+          {result.honba > 0 && ` + ${result.honba} 本場`}
         </p>
-        <ScoreDeltas deltas={result.scoreDeltas} />
-        {statsLine}
-        <div className="btn-row">
-          <button type="button" className="btn" onClick={onRestart}>
-            もう一度
-          </button>
-        </div>
+        <ScoreDeltas scores={scores} deltas={result.scoreDeltas} />
+        {footer}
       </div>
     </div>
   );
 }
 
-function ScoreDeltas({ deltas }: { deltas: number[] }) {
+function ScoreDeltas({
+  scores,
+  deltas,
+}: {
+  scores: number[];
+  deltas: number[];
+}) {
   return (
     <div>
       {SEAT_NAMES.map((name, seat) => (
         <div key={name} className="ukeire-row">
           <span>{name}</span>
           <span className="ukeire-count">
-            {START_SCORE + deltas[seat]}（{deltas[seat] >= 0 ? "+" : ""}
+            {scores[seat]}（{deltas[seat] >= 0 ? "+" : ""}
             {deltas[seat]}）
           </span>
         </div>
@@ -359,7 +448,7 @@ export default function FourPlayerMahjong() {
   const [callout, setCallout] = useState<{ seat: Seat; text: string } | null>(
     null,
   );
-  const prevRef = useRef<RoundState | null>(null);
+  const prevRef = useRef<MatchState | null>(null);
 
   const delay = fast ? 150 : 500;
 
@@ -369,28 +458,38 @@ export default function FourPlayerMahjong() {
     prevRef.current = state;
     if (!state || !prev || state === prev) return;
 
-    for (const seat of SEATS) {
-      const before = prev.players[seat];
-      const after = state.players[seat];
-      if (after.melds.length > before.melds.length) {
-        const meld = after.melds[after.melds.length - 1];
-        const text =
-          meld.type === "chi" ? "チー" : meld.type === "pon" ? "ポン" : "カン";
-        setCallout({ seat, text });
-      } else if (
-        after.melds.some(
-          (m, i) => before.melds[i] && before.melds[i].type !== m.type,
-        )
-      ) {
-        setCallout({ seat, text: "カン" }); // 加槓
-      } else if (!before.riichi && after.riichi) {
-        setCallout({ seat, text: "リーチ" });
+    // 新規局へ差し替わった直後（前局が finished）は発声を導出しない
+    if (prev.round.phase.t !== "finished") {
+      for (const seat of SEATS) {
+        const before = prev.round.players[seat];
+        const after = state.round.players[seat];
+        if (after.melds.length > before.melds.length) {
+          const meld = after.melds[after.melds.length - 1];
+          const text =
+            meld.type === "chi"
+              ? "チー"
+              : meld.type === "pon"
+                ? "ポン"
+                : "カン";
+          setCallout({ seat, text });
+        } else if (
+          after.melds.some(
+            (m, i) => before.melds[i] && before.melds[i].type !== m.type,
+          )
+        ) {
+          setCallout({ seat, text: "カン" }); // 加槓
+        } else if (!before.riichi && after.riichi) {
+          setCallout({ seat, text: "リーチ" });
+        }
       }
     }
 
-    // 終局したら戦績を更新する
-    if (prev.phase.t !== "finished" && state.phase.t === "finished") {
-      const result = state.phase.result;
+    // 局が終了したら戦績を更新する（局単位。tonpuu では各局終了ごとに 1 回）
+    if (
+      prev.round.phase.t !== "finished" &&
+      state.round.phase.t === "finished"
+    ) {
+      const result = state.round.phase.result;
       const next = { ...loadStats() };
       next.games += 1;
       if (result.type === "win") {
@@ -415,7 +514,7 @@ export default function FourPlayerMahjong() {
   // CPU の手番と立直後の自動ツモ切りをタイマーで進める
   useEffect(() => {
     if (!state) return;
-    const ph = state.phase;
+    const ph = state.round.phase;
     if (ph.t === "cpuTurn") {
       const id = setTimeout(() => dispatch({ type: "CPU_STEP" }), delay);
       return () => clearTimeout(id);
@@ -428,17 +527,30 @@ export default function FourPlayerMahjong() {
     ) {
       const id = setTimeout(
         () =>
-          dispatch({ type: "DISCARD", index: state.players[0].hand.length }),
+          dispatch({
+            type: "DISCARD",
+            index: state.round.players[0].hand.length,
+          }),
         delay,
       );
       return () => clearTimeout(id);
     }
   }, [state, delay]);
 
-  const newGame = () => {
+  const newGame = (mode: MatchMode) => {
     setRiichiArmed(false);
     setCallout(null);
-    dispatch({ type: "NEW_GAME", seed: Math.floor(Math.random() * 2 ** 31) });
+    dispatch({
+      type: "NEW_GAME",
+      mode,
+      seed: Math.floor(Math.random() * 2 ** 31),
+    });
+  };
+
+  const nextRound = () => {
+    setRiichiArmed(false);
+    setCallout(null);
+    dispatch({ type: "ADVANCE", seed: Math.floor(Math.random() * 2 ** 31) });
   };
 
   const toggleFast = () => {
@@ -453,8 +565,12 @@ export default function FourPlayerMahjong() {
       <main>
         <div className="panel">
           <p>
-            CPU 3 人との東 1 局一本勝負。立直・鳴き（ポン・チー・カン）に
+            CPU 3 人との四人打ちリーチ麻雀。立直・鳴き（ポン・チー・カン）に
             フル対応。CPU は牌効率で手を進め、立直が入ると降りる標準思考です。
+          </p>
+          <p className="note">
+            東風戦は東 1〜4 局を通し、連荘・本場・供託持ち越し・トビ・親の
+            アガリやめを裁定して最終順位を競います。東 1 局は 1 局勝負です。
           </p>
           {stats.games > 0 && (
             <p className="note">
@@ -463,8 +579,19 @@ export default function FourPlayerMahjong() {
             </p>
           )}
           <div className="btn-row">
-            <button type="button" className="btn" onClick={newGame}>
-              対局開始
+            <button
+              type="button"
+              className="btn fpm-win-btn"
+              onClick={() => newGame("tonpuu")}
+            >
+              東風戦
+            </button>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => newGame("single")}
+            >
+              東 1 局
             </button>
           </div>
         </div>
@@ -472,8 +599,10 @@ export default function FourPlayerMahjong() {
     );
   }
 
-  const ph = state.phase;
-  const p0 = state.players[0];
+  const round = state.round;
+  const ph = round.phase;
+  const p0 = round.players[0];
+  const showKyoku = state.mode === "tonpuu";
 
   const discard = (index: number) => {
     if (ph.t !== "playerTurn") return;
@@ -514,7 +643,12 @@ export default function FourPlayerMahjong() {
         </button>
       </div>
 
-      <TableView state={state} callout={callout} />
+      <TableView
+        state={round}
+        callout={callout}
+        kyoku={state.kyoku}
+        showKyoku={showKyoku}
+      />
 
       {ph.t === "playerTurn" && (
         <div className="fpm-actions">
@@ -636,14 +770,13 @@ export default function FourPlayerMahjong() {
 
       {ph.t === "finished" && (
         <ResultPanel
-          result={ph.result}
-          winnerMelds={
-            ph.result.type === "win"
-              ? state.players[ph.result.winner].melds
-              : []
-          }
+          round={round}
+          mode={state.mode}
+          matchOver={isMatchOver(state)}
+          startDealer={state.startDealer}
           stats={stats}
-          onRestart={newGame}
+          onNext={nextRound}
+          onRestart={() => newGame(state.mode)}
         />
       )}
     </main>

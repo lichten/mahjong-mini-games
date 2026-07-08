@@ -679,6 +679,12 @@ button.tile:disabled {
   gap: 1px;
 }
 
+.fpm-center-kyoku {
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
 /* --- 発声（卓へのオーバーレイ。テキストは常に正位置） --- */
 
 .fpm-callout {
@@ -771,4 +777,35 @@ button.tile:disabled {
   margin-top: 0;
   background: var(--felt-dark);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* --- 東風戦の最終順位 --- */
+
+.fpm-ranking {
+  margin: 8px 0;
+}
+
+.fpm-rank-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.fpm-rank-row + .fpm-rank-row {
+  margin-top: 2px;
+}
+
+.fpm-rank-self {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.fpm-rank-pos {
+  font-weight: 700;
+  min-width: 2.4em;
+}
+
+.fpm-rank-row .ukeire-count {
+  margin-left: auto;
 }
