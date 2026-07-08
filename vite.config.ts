@@ -23,10 +23,12 @@ export default defineConfig({
     spa404Fallback(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["icon.svg"],
+      includeAssets: ["icon.svg", "favicon.ico", "apple-touch-icon-180x180.png"],
       workbox: {
-        // 牌 SVG もプリキャッシュしてオフラインで遊べるようにする
-        globPatterns: ["**/*.{js,css,html,svg,webmanifest}"],
+        // 牌 SVG やアイコン PNG もプリキャッシュしてオフラインで遊べるようにする
+        globPatterns: ["**/*.{js,css,html,svg,png,ico,webmanifest}"],
+        // マニフェスト用スクリーンショットはインストールサイズ節約のため除外
+        globIgnores: ["screenshots/**"],
       },
       manifest: {
         // インストール時は「四人打ち麻雀」が起動する専用アプリとして振る舞う。
@@ -47,10 +49,55 @@ export default defineConfig({
         theme_color: "#1a6b3c",
         icons: [
           {
+            src: "pwa-64x64.png",
+            sizes: "64x64",
+            type: "image/png",
+          },
+          {
+            src: "pwa-192x192.png",
+            sizes: "192x192",
+            type: "image/png",
+          },
+          {
+            src: "pwa-512x512.png",
+            sizes: "512x512",
+            type: "image/png",
+          },
+          {
+            src: "maskable-icon-512x512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable",
+          },
+          {
             src: "icon.svg",
             sizes: "any",
             type: "image/svg+xml",
             purpose: "any",
+          },
+        ],
+        // Android のリッチインストールシート用(scripts/screenshots.mjs で撮影)
+        screenshots: [
+          {
+            src: "screenshots/game.png",
+            sizes: "390x844",
+            type: "image/png",
+            form_factor: "narrow",
+            label: "対局画面(実卓風レイアウト)",
+          },
+          {
+            src: "screenshots/result.png",
+            sizes: "390x844",
+            type: "image/png",
+            form_factor: "narrow",
+            label: "和了時の点数計算",
+          },
+          {
+            src: "screenshots/start.png",
+            sizes: "390x844",
+            type: "image/png",
+            form_factor: "narrow",
+            label: "モード選択(東風戦・東 1 局)",
           },
         ],
       },

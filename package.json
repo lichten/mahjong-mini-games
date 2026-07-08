@@ -11,7 +11,9 @@
     "test:watch": "vitest",
     "lint": "biome check src",
     "format": "biome format --write src",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "icons": "pwa-assets-generator",
+    "screenshots": "node scripts/screenshots.mjs"
   },
   "dependencies": {
     "react": "^19.2.7",
@@ -22,6 +24,7 @@
     "@biomejs/biome": "^2.5.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@vite-pwa/assets-generator": "^1.0.2",
     "@vitejs/plugin-react": "^6.0.3",
     "playwright-core": "^1.61.1",
     "typescript": "^6.0.3",

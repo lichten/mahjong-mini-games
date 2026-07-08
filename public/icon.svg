@@ -1,5 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#1a6b3c"/>
-  <rect x="116" y="76" width="280" height="360" rx="36" fill="#f6f1e7" stroke="#c9c2b2" stroke-width="6"/>
-  <text x="256" y="290" font-family="'Hiragino Mincho ProN','Yu Mincho',serif" font-size="200" font-weight="bold" fill="#c0392b" text-anchor="middle" dominant-baseline="middle">中</text>
+  <!--
+    PWA アイコンのソース。フルブリード正方形で、主要素(牌)は maskable の
+    セーフゾーン(中央 80% の円 = 半径 204.8)内に収める。
+    角丸は OS 側のマスクに任せるため付けない。
+    PNG 一式の再生成: npm run icons(doc/08-pwa.md 参照)
+  -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#22884d"/>
+      <stop offset="1" stop-color="#134a29"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <!-- 牌の影 -->
+  <rect x="146" y="120" width="240" height="300" rx="30" fill="#0a2e18" opacity="0.5"/>
+  <!-- 牌(セーフゾーン内: 中心からの対角距離 ≈ 192 < 204.8) -->
+  <rect x="136" y="106" width="240" height="300" rx="30" fill="#f6f1e7"/>
+  <rect x="136" y="106" width="240" height="300" rx="30" fill="none" stroke="#c9c2b2" stroke-width="6"/>
+  <!-- dominant-baseline は librsvg(sharp)で効かないため、ベースライン y を手動調整 -->
+  <text x="256" y="330" font-family="'Yu Mincho','Hiragino Mincho ProN','MS Mincho',serif" font-size="196" font-weight="bold" fill="#1d3557" text-anchor="middle">東</text>
 </svg>
