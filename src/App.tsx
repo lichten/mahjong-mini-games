@@ -1,5 +1,6 @@
 import { Suspense, useEffect } from "react";
 import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
+import { UpdateToast } from "./components/UpdateToast";
 import { type GameMeta, games } from "./gameRegistry";
 import { Home } from "./Home";
 
@@ -46,6 +47,7 @@ export function App() {
         ))}
         <Route path="*" element={<Home />} />
       </Routes>
+      <UpdateToast />
     </BrowserRouter>
   );
 }

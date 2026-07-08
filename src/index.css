@@ -809,3 +809,41 @@ button.tile:disabled {
 .fpm-rank-row .ukeire-count {
   margin-left: auto;
 }
+
+/* ---------- SW 更新トースト ---------- */
+
+.update-toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #0f3d22;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+}
+
+.update-toast button {
+  border: none;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.update-toast-apply {
+  background: var(--accent);
+  color: #333;
+  font-weight: 700;
+}
+
+.update-toast-later {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text);
+}

@@ -22,13 +22,17 @@ export default defineConfig({
     react(),
     spa404Fallback(),
     VitePWA({
-      registerType: "autoUpdate",
+      // autoUpdate は新 SW 到着時に自動リロードされ対局が消えるため、
+      // トーストでユーザーが「更新する」を押した時だけ適用する(src/components/UpdateToast.tsx)
+      registerType: "prompt",
       includeAssets: ["icon.svg", "favicon.ico", "apple-touch-icon-180x180.png"],
       workbox: {
         // 牌 SVG やアイコン PNG もプリキャッシュしてオフラインで遊べるようにする
         globPatterns: ["**/*.{js,css,html,svg,png,ico,webmanifest}"],
         // マニフェスト用スクリーンショットはインストールサイズ節約のため除外
         globIgnores: ["screenshots/**"],
+        // オフライン時のルート直リロードは SPA の index.html へフォールバックする
+        navigateFallback: "/mahjong-mini-games/index.html",
       },
       manifest: {
         // インストール時は「四人打ち麻雀」が起動する専用アプリとして振る舞う。
