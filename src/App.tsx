@@ -1,9 +1,21 @@
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
 import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
 import { type GameMeta, games } from "./gameRegistry";
 import { Home } from "./Home";
 
+const SITE_TITLE = "麻雀ミニゲーム集";
+
+function usePageTitle(title: string) {
+  useEffect(() => {
+    document.title = title;
+    return () => {
+      document.title = SITE_TITLE;
+    };
+  }, [title]);
+}
+
 function GamePage({ game }: { game: GameMeta }) {
+  usePageTitle(`${game.title} | ${SITE_TITLE}`);
   const GameComponent = game.component;
   return (
     <div className="game-page">
