@@ -13,6 +13,11 @@
   box-sizing: border-box;
 }
 
+html {
+  /* プルリフレッシュ・スクロール連鎖を無効化(対局中の誤リロード防止) */
+  overscroll-behavior: none;
+}
+
 body {
   margin: 0;
   font-family:
@@ -28,6 +33,18 @@ body {
   color: var(--text);
   min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
+  /* ノッチ・ホームバーを避ける(index.html の viewport-fit=cover と対) */
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+button,
+a {
+  /* ダブルタップズーム判定の待ちをなくし、タップ反応を速くする */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 a {
@@ -207,6 +224,10 @@ h1 {
   background-repeat: no-repeat;
   filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35));
   display: inline-block;
+  /* 牌の連打で選択ハイライトや長押しメニューが出ないようにする */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 button.tile {
