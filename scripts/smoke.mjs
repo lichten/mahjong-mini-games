@@ -111,6 +111,29 @@ await page.screenshot({ path: `${SHOTS}/flow-four-player-mahjong.png` });
 await page.reload();
 await page.waitForSelector("h1");
 
+// 5. PWA マニフェスト（専用アプリ設定とアイコンの検証）
+const manifest = await page.evaluate(async (base) => {
+  const res = await fetch(`${base}manifest.webmanifest`);
+  if (!res.ok) throw new Error(`manifest fetch failed: ${res.status}`);
+  return res.json();
+}, BASE);
+if (!manifest.start_url?.endsWith("/four-player-mahjong")) {
+  errors.push(`[manifest] start_url が四人打ち麻雀を指していない: ${manifest.start_url}`);
+}
+if (!manifest.icons?.some((i) => i.sizes === "512x512" && i.type === "image/png")) {
+  errors.push("[manifest] 512x512 PNG アイコンがない");
+}
+if (!manifest.icons?.some((i) => i.purpose === "maskable")) {
+  errors.push("[manifest] maskable アイコンがない");
+}
+for (const icon of manifest.icons ?? []) {
+  const status = await page.evaluate(
+    async ({ base, src }) => (await fetch(`${base}${src}`)).status,
+    { base: BASE, src: icon.src },
+  );
+  if (status !== 200) errors.push(`[manifest] アイコン ${icon.src} が ${status}`);
+}
+
 await browser.close();
 
 if (errors.length > 0) {
