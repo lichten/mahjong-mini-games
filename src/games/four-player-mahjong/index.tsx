@@ -14,6 +14,7 @@ import {
 } from "./engine";
 import {
   advanceMatch,
+  finalPoints,
   finalRanking,
   isMatchOver,
   type MatchMode,
@@ -50,10 +51,12 @@ function loadStats(): Stats {
 type Action =
   | GameEvent
   | { type: "NEW_GAME"; mode: MatchMode; seed: number }
-  | { type: "ADVANCE"; seed: number };
+  | { type: "ADVANCE"; seed: number }
+  | { type: "RESET" };
 
 function reducer(state: MatchState | null, action: Action): MatchState | null {
   if (action.type === "NEW_GAME") return startMatch(action.mode, action.seed);
+  if (action.type === "RESET") return null;
   if (!state) return state;
   // ADVANCE は局終了（finished）中に来るので finished ガードより前で処理する
   if (action.type === "ADVANCE") return advanceMatch(state, action.seed);
@@ -267,27 +270,53 @@ function TableView({
   );
 }
 
-/** 東風戦の最終順位（1 位 → 4 位） */
-function FinalRanking({
+/** 東風戦終了後の点数集計画面（最終順位・持ち点・ウマオカ換算ポイント） */
+function MatchSummary({
   round,
   startDealer,
+  onRestart,
+  onTitle,
 }: {
   round: RoundState;
   startDealer: Seat;
+  onRestart: () => void;
+  onTitle: () => void;
 }) {
   const order = finalRanking(round, startDealer);
+  const points = finalPoints(round, startDealer);
   return (
-    <div className="fpm-ranking">
-      {order.map((seat, i) => (
-        <div
-          key={seat}
-          className={`fpm-rank-row${seat === 0 ? " fpm-rank-self" : ""}`}
-        >
-          <span className="fpm-rank-pos">{i + 1}位</span>
-          <span>{SEAT_NAMES[seat]}</span>
-          <span className="ukeire-count">{round.players[seat].score}</span>
+    <div className="fpm-overlay">
+      <div className="panel fpm-modal">
+        <p className="result">最終結果</p>
+        <div className="fpm-ranking">
+          {order.map((seat, i) => (
+            <div
+              key={seat}
+              className={`fpm-rank-row${seat === 0 ? " fpm-rank-self" : ""}`}
+            >
+              <span className="fpm-rank-pos">{i + 1}位</span>
+              <span>{SEAT_NAMES[seat]}</span>
+              <span className="fpm-summary-pt">
+                {points[seat] >= 0 ? "+" : ""}
+                {points[seat].toFixed(1)}pt
+              </span>
+              <span className="ukeire-count">{round.players[seat].score}</span>
+            </div>
+          ))}
         </div>
-      ))}
+        {round.kyotaku > 0 && (
+          <p className="note">供託 {round.kyotaku / 1000} 本はトップが取得</p>
+        )}
+        <p className="note">25000 点持ち 30000 点返し / ウマ 10-20</p>
+        <div className="btn-row">
+          <button type="button" className="btn fpm-win-btn" onClick={onRestart}>
+            もう一度
+          </button>
+          <button type="button" className="btn" onClick={onTitle}>
+            タイトルへ
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -296,18 +325,18 @@ function ResultPanel({
   round,
   mode,
   matchOver,
-  startDealer,
   stats,
   onNext,
   onRestart,
+  onShowSummary,
 }: {
   round: RoundState;
   mode: MatchMode;
   matchOver: boolean;
-  startDealer: Seat;
   stats: Stats;
   onNext: () => void;
   onRestart: () => void;
+  onShowSummary: () => void;
 }) {
   if (round.phase.t !== "finished") return null;
   const result = round.phase.result;
@@ -322,20 +351,21 @@ function ResultPanel({
     </p>
   );
 
-  const showNext = mode === "tonpuu" && !matchOver;
   const footer = (
     <>
-      {mode === "tonpuu" && matchOver && (
-        <>
-          <p className="result">最終結果</p>
-          <FinalRanking round={round} startDealer={startDealer} />
-        </>
-      )}
       {statsLine}
       <div className="btn-row">
-        {showNext ? (
+        {mode === "tonpuu" && !matchOver ? (
           <button type="button" className="btn fpm-win-btn" onClick={onNext}>
             次局へ
+          </button>
+        ) : mode === "tonpuu" ? (
+          <button
+            type="button"
+            className="btn fpm-win-btn"
+            onClick={onShowSummary}
+          >
+            結果発表へ
           </button>
         ) : (
           <button type="button" className="btn" onClick={onRestart}>
@@ -442,6 +472,7 @@ function ScoreDeltas({
 export default function FourPlayerMahjong() {
   const [state, dispatch] = useReducer(reducer, null);
   const [riichiArmed, setRiichiArmed] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
   const [fast, setFast] = useState(
     () => localStorage.getItem(FAST_KEY) === "1",
   );
@@ -544,11 +575,19 @@ export default function FourPlayerMahjong() {
   const newGame = (mode: MatchMode) => {
     setRiichiArmed(false);
     setCallout(null);
+    setShowSummary(false);
     dispatch({
       type: "NEW_GAME",
       mode,
       seed: Math.floor(Math.random() * 2 ** 31),
     });
+  };
+
+  const quitToTitle = () => {
+    setRiichiArmed(false);
+    setCallout(null);
+    setShowSummary(false);
+    dispatch({ type: "RESET" });
   };
 
   const nextRound = () => {
@@ -772,15 +811,23 @@ export default function FourPlayerMahjong() {
         disabled={ph.t !== "playerTurn"}
       />
 
-      {ph.t === "finished" && (
+      {ph.t === "finished" && !showSummary && (
         <ResultPanel
           round={round}
           mode={state.mode}
           matchOver={isMatchOver(state)}
-          startDealer={state.startDealer}
           stats={stats}
           onNext={nextRound}
           onRestart={() => newGame(state.mode)}
+          onShowSummary={() => setShowSummary(true)}
+        />
+      )}
+      {ph.t === "finished" && showSummary && (
+        <MatchSummary
+          round={round}
+          startDealer={state.startDealer}
+          onRestart={() => newGame(state.mode)}
+          onTitle={quitToTitle}
         />
       )}
     </main>

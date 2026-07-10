@@ -839,6 +839,17 @@ button.tile:disabled {
   margin-left: auto;
 }
 
+/* 集計画面の換算ポイント列。auto マージンは pt 側に移し素点は固定間隔 */
+.fpm-summary-pt {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.9;
+}
+
+.fpm-rank-row .fpm-summary-pt + .ukeire-count {
+  margin-left: 12px;
+}
+
 /* ---------- SW 更新トースト ---------- */
 
 .update-toast {

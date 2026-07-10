@@ -4,6 +4,7 @@ import type { RoundResult } from "./engine";
 import { START_SCORE } from "./engine";
 import {
   advanceMatch,
+  finalPoints,
   finalRanking,
   isMatchOver,
   type MatchState,
@@ -243,6 +244,50 @@ describe("match: 最終順位", () => {
   });
 });
 
+describe("match: finalPoints（ウマ・オカ換算）", () => {
+  function roundWith(scores: number[], kyotaku = 0) {
+    return testState({
+      kyotaku,
+      players: [
+        testPlayer(JUNK_HAND, { score: scores[0] }),
+        testPlayer(JUNK_HAND, { score: scores[1] }),
+        testPlayer(JUNK_HAND, { score: scores[2] }),
+        testPlayer(JUNK_HAND, { score: scores[3] }),
+      ],
+    });
+  }
+
+  it("全員 25000 → 起家順に +35 / +5 / -15 / -25", () => {
+    // startDealer=1 → 順位は 1,2,3,0
+    const pts = finalPoints(roundWith(EVEN), 1);
+    expect(pts).toEqual([-25, 35, 5, -15]);
+  });
+
+  it("一般分布で素点+ウマ+オカが正しく、合計 ±0", () => {
+    const pts = finalPoints(roundWith([38200, 26100, 21400, 14300]), 0);
+    expect(pts).toEqual([48.2, 6.1, -18.6, -35.7]);
+    expect(pts.reduce((a, b) => a + b, 0)).toBeCloseTo(0);
+  });
+
+  it("残存供託はトップ取りで合計 ±0 を維持", () => {
+    const pts = finalPoints(roundWith([30000, 25000, 24000, 20000], 1000), 0);
+    expect(pts[0]).toBe(41); // (30000+1000-30000)/1000 + 20 + オカ 20
+    expect(pts.reduce((a, b) => a + b, 0)).toBeCloseTo(0);
+  });
+
+  it("トビ（マイナス持ち点）でも正しく換算される", () => {
+    const pts = finalPoints(roundWith([-1000, 26000, 50000, 25000]), 0);
+    expect(pts).toEqual([-51, 6, 60, -15]);
+    expect(pts.reduce((a, b) => a + b, 0)).toBeCloseTo(0);
+  });
+
+  it("同点のウマ配分は finalRanking と同じタイブレーク（起家に近い席優先）", () => {
+    const round = roundWith([25000, 25000, 30000, 20000]);
+    // startDealer=1 → 順位は 2,1,0,3。同点の 0 と 1 では 1 が上位のウマ
+    expect(finalPoints(round, 1)).toEqual([-15, 5, 40, -30]);
+  });
+});
+
 describe("match: single モード", () => {
   it("1 局で終局し done になる", () => {
     const m = startMatch("single", 7);
@@ -272,6 +317,8 @@ describe("match: 東風戦の通し自動対局（不変条件）", () => {
         final.round.kyotaku;
       expect(total).toBe(4 * START_SCORE);
       expect(final.kyoku).toBeGreaterThanOrEqual(1);
+      const pts = finalPoints(final.round, final.startDealer);
+      expect(pts.reduce((a, b) => a + b, 0)).toBeCloseTo(0);
     }
   });
 });

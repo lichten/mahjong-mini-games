@@ -7,7 +7,7 @@
  */
 
 import type { Seat } from "../../core";
-import { deal, type RoundState, SEATS } from "./engine";
+import { deal, type RoundState, SEATS, START_SCORE } from "./engine";
 
 export type MatchMode = "single" | "tonpuu";
 
@@ -127,4 +127,31 @@ export function finalRanking(round: RoundState, startDealer: Seat): Seat[] {
     if (diff !== 0) return diff;
     return ((a - startDealer + 4) % 4) - ((b - startDealer + 4) % 4);
   }) as Seat[];
+}
+
+/** 返し点（オカの基準） */
+export const RETURN_SCORE = 30000;
+/** ウマ（1 位 → 4 位） */
+export const UMA = [20, 10, -10, -20];
+/** オカ（返し点との差 ×4。トップに一括加算） */
+const OKA = ((RETURN_SCORE - START_SCORE) * 4) / 1000;
+
+/**
+ * ウマ・オカ換算の最終ポイント（seat 順）。
+ * 流局終局では供託が卓上に残り得るためトップ取りとする。これで
+ * Σ(score)+kyotaku = 100000 の不変式からポイント合計 ±0 が保たれる。
+ * 同点時のウマ配分は finalRanking と同一基準（起家に近い席優先）。
+ */
+export function finalPoints(round: RoundState, startDealer: Seat): number[] {
+  const order = finalRanking(round, startDealer);
+  const points = [0, 0, 0, 0];
+  for (let rank = 0; rank < 4; rank++) {
+    const seat = order[rank];
+    const kyotakuBonus = rank === 0 ? round.kyotaku : 0;
+    const raw = round.players[seat].score + kyotakuBonus - RETURN_SCORE;
+    // 持ち点は 100 点単位なので 0.1pt 整数に丸めてから戻す（浮動小数誤差回避）
+    points[seat] = Math.round(raw / 100) / 10 + UMA[rank];
+  }
+  points[order[0]] += OKA;
+  return points;
 }
