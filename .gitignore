@@ -4,3 +4,7 @@ dev-dist/
 scripts/smoke-shots/
 *.local
 .DS_Store
+dist-app/
+android/keystore.properties
+*.jks
+*.keystore

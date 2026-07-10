@@ -46,10 +46,11 @@
 
 ## 将来のアプリ化シナリオ
 
-当面はストア公開しないが、後からネイティブアプリ化できるよう次の点を守って開発する。
+後からネイティブアプリ化できるよう次の点を守って開発する。
 
 1. **Web 標準 API のみを使う**: ブラウザ固有・OS 固有の API に依存しない
 2. **ロジックと UI の分離**: 麻雀ロジック（`src/core/`）は DOM に依存しない純粋 TypeScript で書く（→ [04-architecture.md](04-architecture.md)）
 3. **アプリ化の第一候補は Capacitor**: Web アプリをそのまま WebView でラップして iOS / Android アプリにできる。この構成なら追加コストが最小で済む
 
-この方針を守っていれば「まず Web で公開 → 反応が良ければ Capacitor でストア展開」という段階的な移行が可能になる。
+この方針に沿って、四人打ち麻雀は **Capacitor で Android アプリ化済み**（→ [09-android-app.md](09-android-app.md)）。
+唯一の OS 依存だった Wake Lock も `useWakeLock` 内でネイティブ/Web を分岐して吸収している。

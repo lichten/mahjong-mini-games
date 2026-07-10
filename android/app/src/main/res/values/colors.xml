@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- アプリのテーマカラー(Web 版の theme_color #1a6b3c と揃える) -->
+    <color name="colorPrimary">#1a6b3c</color>
+    <color name="colorPrimaryDark">#14562f</color>
+    <color name="colorAccent">#e9c46a</color>
+</resources>

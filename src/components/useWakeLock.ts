@@ -1,13 +1,24 @@
+import { Capacitor } from "@capacitor/core";
+import { KeepAwake } from "@capacitor-community/keep-awake";
 import { useEffect } from "react";
 
 /**
  * active の間、画面が自動消灯しないよう Screen Wake Lock を要求する。
  * タブが非表示になるとロックは OS 側で解放されるため、復帰時に再取得する。
  * 非対応環境(古い iOS 等)では何もしない。
+ * Capacitor ネイティブ環境(Android WebView は Wake Lock API 非対応)では
+ * keep-awake プラグイン(FLAG_KEEP_SCREEN_ON)を使う。
  */
 export function useWakeLock(active: boolean) {
   useEffect(() => {
-    if (!active || !("wakeLock" in navigator)) return;
+    if (!active) return;
+    if (Capacitor.isNativePlatform()) {
+      KeepAwake.keepAwake().catch(() => {});
+      return () => {
+        KeepAwake.allowSleep().catch(() => {});
+      };
+    }
+    if (!("wakeLock" in navigator)) return;
     let cancelled = false;
     let lock: WakeLockSentinel | null = null;
 

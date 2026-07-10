@@ -13,6 +13,8 @@ npm run build    # 型チェック + 本番ビルド
 
 main ブランチへの push で GitHub Actions が GitHub Pages へ自動デプロイする。
 
+「四人打ち麻雀」は Capacitor で Android アプリにもビルドできる(`npm run cap:run`。→ [doc/09-android-app.md](doc/09-android-app.md))。
+
 プロジェクトの方針・設計は [doc/README.md](doc/README.md) を参照。
 
 ## 収録ゲーム（全 11 本）
